@@ -8,9 +8,9 @@ use serde_json::{Value, json};
 use crate::{
     error::{LeetCodeErr, Result},
     models::{
-        DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, MatchedUser,
-        ProblemsetQuestionList, Question, QuestionListOuter, QuestionOuter, UserProfile,
-        UserStatus,
+        DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, Language, MatchedUser,
+        ProblemsetQuestionList, Question, QuestionListOuter, QuestionOuter,
+        SubmissionCheckResponse, SubmissionResponse, UserProfile, UserStatus,
     },
     utils::convert_to_markdown,
 };
@@ -144,6 +144,46 @@ impl LeetCodeClient {
         self.request(&url, query, variables).await
     }
 
+    /// Submits a code solution for a prolem.
+    ///
+    /// # Arguments
+    /// * `slug` - The slug for the problem being solved.
+    /// * `question_id` - The id of the question.
+    /// * `lang` - The programming language used to write the code.
+    /// * `code` - The code being submitted.
+    ///
+    /// # Returns
+    /// The submission id for this submission.
+    pub async fn submit_code(
+        &self,
+        slug: &str,
+        question_id: &str,
+        lang: Language,
+        code: &str,
+    ) -> Result<u32> {
+        let url = format!("{BASE_URL}/problems/{slug}/submit/");
+        let body = json!({
+            "lang": lang,
+            "question_id": question_id,
+            "typed_code": code,
+        });
+
+        let res: SubmissionResponse = self.raw_request(Method::POST, &url, body).await?;
+        Ok(res.submission_id)
+    }
+
+    /// Checks for the submission to a problem.
+    ///
+    /// # Arguments
+    /// * `submission_id` - The id of the submission that wants to be checked.
+    ///
+    /// # Returns
+    /// A submission check result.
+    pub async fn check_submission(&self, submission_id: u32) -> Result<SubmissionCheckResponse> {
+        let url = format!("{BASE_URL}/submissions/detail/{submission_id}/check/");
+        self.raw_request(Method::GET, &url, Value::Null).await
+    }
+
     /// Makes a GraphQL request to the leetcode api.
     ///
     /// # Arguments
@@ -159,7 +199,20 @@ impl LeetCodeClient {
         T: DeserializeOwned,
     {
         let body = json!({ "query": query, "variables": variables });
-        self.raw_request(Method::POST, url, body).await
+        let body: GqlResponse<T> = self.raw_request(Method::POST, url, body).await?;
+
+        if let Some(errors) = body.errors {
+            let msg = errors
+                .into_iter()
+                .map(|e| e.message)
+                .collect::<Vec<_>>()
+                .join(" - ");
+
+            return Err(LeetCodeErr::Api(msg));
+        }
+
+        body.data
+            .ok_or_else(|| LeetCodeErr::Api("No data was returned from Leet Code".into()))
     }
 
     /// Makes the actual http request.
@@ -183,28 +236,22 @@ impl LeetCodeClient {
             csrf,
         } = self;
 
-        let req = client
-            .request(method, url)
-            .header(
-                COOKIE,
-                format!("LEETCODE_SESSION={session}; csrftoken={csrf}"),
-            )
-            .json(&body);
+        let cookie = format!("LEETCODE_SESSION={session}; csrftoken={csrf}");
+        let mut req = client.request(method, url).header(COOKIE, cookie);
 
-        let res = req.send().await?;
-        let body: GqlResponse<T> = res.json().await?;
-
-        if let Some(errors) = body.errors {
-            let msg = errors
-                .into_iter()
-                .map(|e| e.message)
-                .collect::<Vec<_>>()
-                .join(" - ");
-
-            return Err(LeetCodeErr::Api(msg));
+        if !body.is_null() {
+            req = req.json(&body);
         }
 
-        body.data
-            .ok_or_else(|| LeetCodeErr::Api("No data was returned from Leet Code".into()))
+        let res = req.send().await?;
+        let status = res.status();
+        let text = res.text().await?;
+
+        if !status.is_success() {
+            return Err(LeetCodeErr::Api(format!("Status: {status}\nError: {text}")));
+        }
+
+        serde_json::from_str(&text)
+            .map_err(|e| LeetCodeErr::Api(format!("JSON Decode Error: {e}\nRaw Response: {text}")))
     }
 }
