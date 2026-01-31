@@ -13,7 +13,6 @@ use crate::{
         SubmissionCheckResponse, SubmissionResponse, TestCasesCheckResponse, TestCasesResponse,
         UserProfile, UserStatus,
     },
-    utils::convert_to_markdown,
 };
 
 const BASE_URL: &str = "https://leetcode.com";
@@ -99,11 +98,10 @@ impl LeetCodeClient {
         let vars = json!({ "titleSlug": title_slug });
 
         let data: QuestionOuter = self.request_graphql(query, vars).await?;
-        let mut question = data
+        let question = data
             .question
             .ok_or_else(|| LeetCodeErr::Api(format!("Question {title_slug} not found")))?;
 
-        question.content = convert_to_markdown(&question.content)?;
         Ok(question)
     }
 

@@ -1,19 +1,15 @@
 query userProfile($username: String!) {
   matchedUser(username: $username) {
-    github
-    twitter
+    username
+    githubUrl
+    twitterUrl
+    linkedinUrl
     profile {
       ranking
       reputation
       userAvatar
       realName
       aboutMe
-    }
-    submitStats: submitStatsGlobal {
-      acSubmissionNum {
-        difficulty
-        count
-      }
     }
   }
 }
