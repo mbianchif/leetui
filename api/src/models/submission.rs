@@ -9,6 +9,9 @@ pub struct SubmissionResponse {
 pub struct SubmissionCheckResponse {
     pub state: SubmissionState,
     pub status_msg: Option<StatusMsg>,
+    pub status_id: Option<i32>,
+    pub question_id: Option<String>,
+    pub task_finish_time: Option<i64>,
     pub run_success: bool,
 
     // Judging metadata
