@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use serde_with::{json::JsonString, serde_as};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -6,6 +7,7 @@ pub struct QuestionOuter {
     pub question: Option<Question>,
 }
 
+#[serde_as]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Question {
@@ -15,6 +17,31 @@ pub struct Question {
     pub content: String,
     pub difficulty: String,
     pub code_snippets: Vec<CodeSnippet>,
+    pub example_test_cases: String,
+    #[serde_as(as = "JsonString")]
+    pub meta_data: MetaData,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetaData {
+    pub name: String,
+    pub params: Vec<Param>,
+    #[serde(rename = "return")]
+    pub return_type: ReturnType,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Param {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub param_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReturnType {
+    #[serde(rename = "type")]
+    pub inner: String,
 }
 
 #[derive(Debug, Deserialize)]

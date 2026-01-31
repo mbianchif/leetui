@@ -5,6 +5,15 @@ query userProfile($username: String!) {
     profile {
       ranking
       reputation
+      userAvatar
+      realName
+      aboutMe
+    }
+    submitStats: submitStatsGlobal {
+      acSubmissionNum {
+        difficulty
+        count
+      }
     }
   }
 }

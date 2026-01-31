@@ -8,9 +8,9 @@ use serde_json::{Value, json};
 use crate::{
     error::{LeetCodeErr, Result},
     models::{
-        DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, Language, MatchedUser,
+        DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, MatchedUser,
         ProblemsetQuestionList, Question, QuestionListOuter, QuestionOuter,
-        SubmissionCheckResponse, SubmissionResponse, UserProfile, UserStatus,
+        SubmissionCheckResponse, SubmissionResponse, TestResponse, UserProfile, UserStatus,
     },
     utils::convert_to_markdown,
 };
@@ -127,24 +127,38 @@ impl LeetCodeClient {
         Ok(data.problemset_question_list)
     }
 
-    /// Maes a GraphQL request to the `/graphql` endpoint.
+    /// Runs the testing code for a certain problem.
     ///
     /// # Arguments
-    /// * `query` - The GraphQL query.
-    /// * `variables` - The variables to replace in the query.
+    /// * `slug` - The slug for the problem being solved.
+    /// * `question_id` - The id of the question.
+    /// * `lang` - The programming language used to write the code.
+    /// * `code` - The code being submitted.
+    /// * `test_cases` - The test cases to run.
     ///
     /// # Returns
-    /// A result with the response's data.
-    async fn request_graphql<V, T>(&self, query: &str, variables: V) -> Result<T>
-    where
-        V: Serialize,
-        T: DeserializeOwned,
-    {
-        let url = format!("{BASE_URL}/graphql");
-        self.request(&url, query, variables).await
+    /// The interpret id for this submission.
+    pub async fn run_tests(
+        &self,
+        slug: &str,
+        question_id: &str,
+        lang: &str,
+        code: &str,
+        test_cases: &str,
+    ) -> Result<String> {
+        let url = format!("{BASE_URL}/problems/{slug}/interpret_solution/");
+        let body = json!({
+            "lang": lang,
+            "question_id": question_id,
+            "typed_code": code,
+            "data_input": test_cases,
+        });
+
+        let res: TestResponse = self.raw_request(Method::POST, &url, body).await?;
+        Ok(res.interpret_id)
     }
 
-    /// Submits a code solution for a prolem.
+    /// Submits a code solution for a problem.
     ///
     /// # Arguments
     /// * `slug` - The slug for the problem being solved.
@@ -158,7 +172,7 @@ impl LeetCodeClient {
         &self,
         slug: &str,
         question_id: &str,
-        lang: Language,
+        lang: &str,
         code: &str,
     ) -> Result<u32> {
         let url = format!("{BASE_URL}/problems/{slug}/submit/");
@@ -179,9 +193,30 @@ impl LeetCodeClient {
     ///
     /// # Returns
     /// A submission check result.
-    pub async fn check_submission(&self, submission_id: u32) -> Result<SubmissionCheckResponse> {
-        let url = format!("{BASE_URL}/submissions/detail/{submission_id}/check/");
+    pub async fn check_submission<S: ToString>(
+        &self,
+        submission_id: S,
+    ) -> Result<SubmissionCheckResponse> {
+        let id = submission_id.to_string();
+        let url = format!("{BASE_URL}/submissions/detail/{id}/check/");
         self.raw_request(Method::GET, &url, Value::Null).await
+    }
+
+    /// Maes a GraphQL request to the `/graphql` endpoint.
+    ///
+    /// # Arguments
+    /// * `query` - The GraphQL query.
+    /// * `variables` - The variables to replace in the query.
+    ///
+    /// # Returns
+    /// A result with the response's data.
+    async fn request_graphql<V, T>(&self, query: &str, variables: V) -> Result<T>
+    where
+        V: Serialize,
+        T: DeserializeOwned,
+    {
+        let url = format!("{BASE_URL}/graphql");
+        self.request(&url, query, variables).await
     }
 
     /// Makes a GraphQL request to the leetcode api.

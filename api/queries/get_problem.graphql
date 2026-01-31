@@ -10,5 +10,8 @@ query questionData($titleSlug: String!) {
       langSlug
       code
     }
+    exampleTestcases
+    metaData
+    sampleTestCase
   }
 }

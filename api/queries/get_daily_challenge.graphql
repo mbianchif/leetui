@@ -4,17 +4,14 @@ query questionOfToday {
     userStatus
     link
     question {
-      acRate
-      difficulty
-      freqBar
+      questionId
       frontendQuestionId: questionFrontendId
-      isFavor
-      paidOnly: isPaidOnly
-      status
       title
       titleSlug
-      hasVideoSolution
-      hasSolution
+      difficulty
+      acRate
+      status
+      paidOnly: isPaidOnly
       topicTags {
         name
         id

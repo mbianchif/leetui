@@ -1,7 +1,6 @@
 use std::env;
 
 use api::LeetCodeClient;
-use api::{Language, SubmissionState};
 
 #[tokio::main]
 async fn main() -> Result<(), &'static str> {
@@ -35,8 +34,10 @@ impl Solution {
     }
 }"#;
 
+    let test_cases = "[2,7,11,15]\n9\n[3,2,4]\n6";
+
     let res = api
-        .submit_code("two-sum", "1", Language::Rust, code)
+        .run_tests("two-sum", "1", "rust", code, test_cases)
         .await
         .unwrap();
 
@@ -44,10 +45,10 @@ impl Solution {
 
     let check = loop {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        let check = api.check_submission(res).await.unwrap();
+        let check = api.check_submission(&res).await.unwrap();
 
-        match check.state {
-            SubmissionState::Success => break check,
+        match check.state.as_str() {
+            "SUCCESS" => break check,
             _ => {}
         }
     };
