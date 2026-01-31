@@ -45,10 +45,10 @@ impl Solution {
 
     let check = loop {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        let check = api.check_submission(&res).await.unwrap();
+        let check = api.check_test_cases(&res).await.unwrap();
 
-        match check.state.as_str() {
-            "SUCCESS" => break check,
+        match check.state {
+            api::SubmissionState::Success => break check,
             _ => {}
         }
     };

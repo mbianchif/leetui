@@ -10,7 +10,8 @@ use crate::{
     models::{
         DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, MatchedUser,
         ProblemsetQuestionList, Question, QuestionListOuter, QuestionOuter,
-        SubmissionCheckResponse, SubmissionResponse, TestResponse, UserProfile, UserStatus,
+        SubmissionCheckResponse, SubmissionResponse, TestCasesCheckResponse, TestCasesResponse,
+        UserProfile, UserStatus,
     },
     utils::convert_to_markdown,
 };
@@ -68,7 +69,11 @@ impl LeetCodeClient {
         let query = include_str!("../queries/get_profile.graphql");
         let vars = json!({ "username": username });
         let data: UserProfile = self.request_graphql(query, vars).await?;
-        Ok(data.matched_user)
+        let matched_user = data
+            .matched_user
+            .ok_or_else(|| LeetCodeErr::Api("Failed to find the user".into()))?;
+
+        Ok(matched_user)
     }
 
     /// Retrieves the daily challenge.
@@ -154,8 +159,20 @@ impl LeetCodeClient {
             "data_input": test_cases,
         });
 
-        let res: TestResponse = self.raw_request(Method::POST, &url, body).await?;
+        let res: TestCasesResponse = self.raw_request(Method::POST, &url, body).await?;
         Ok(res.interpret_id)
+    }
+
+    /// Checks for the interpratation of test cases of a problem.
+    ///
+    /// # Arguments
+    /// * `interpret_id` - The id of the testing session that wants to be checked.
+    ///
+    /// # Returns
+    /// A test cases check result.
+    pub async fn check_test_cases(&self, interpret_id: &str) -> Result<TestCasesCheckResponse> {
+        let url = format!("{BASE_URL}/submissions/detail/{interpret_id}/check/");
+        self.raw_request(Method::GET, &url, Value::Null).await
     }
 
     /// Submits a code solution for a problem.
@@ -193,12 +210,8 @@ impl LeetCodeClient {
     ///
     /// # Returns
     /// A submission check result.
-    pub async fn check_submission<S: ToString>(
-        &self,
-        submission_id: S,
-    ) -> Result<SubmissionCheckResponse> {
-        let id = submission_id.to_string();
-        let url = format!("{BASE_URL}/submissions/detail/{id}/check/");
+    pub async fn check_submission(&self, submission_id: u32) -> Result<SubmissionCheckResponse> {
+        let url = format!("{BASE_URL}/submissions/detail/{submission_id}/check/");
         self.raw_request(Method::GET, &url, Value::Null).await
     }
 

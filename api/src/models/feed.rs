@@ -11,4 +11,5 @@ pub struct GlobalData {
 pub struct UserStatus {
     pub username: String,
     pub is_premium: bool,
+    pub is_signed_id: bool,
 }
