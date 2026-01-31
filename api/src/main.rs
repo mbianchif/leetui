@@ -14,7 +14,7 @@ async fn main() -> Result<(), &'static str> {
 
     let api = LeetCodeClient::new(session, csrf).unwrap();
 
-    let res = api.get_problem("two-sum").await.unwrap();
+    let res = api.get_daily_challenge().await.unwrap();
     println!("{res:?}");
 
     Ok(())

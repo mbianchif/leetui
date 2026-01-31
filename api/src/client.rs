@@ -8,8 +8,9 @@ use serde_json::{Value, json};
 use crate::{
     error::{LeetCodeErr, Result},
     models::{
-        GlobalData, GqlResponse, MatchedUser, ProblemsetQuestionList, Question, QuestionListOuter,
-        QuestionOuter, UserProfile, UserStatus,
+        DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, MatchedUser,
+        ProblemsetQuestionList, Question, QuestionListOuter, QuestionOuter, UserProfile,
+        UserStatus,
     },
     utils::convert_to_markdown,
 };
@@ -68,6 +69,16 @@ impl LeetCodeClient {
         let vars = json!({ "username": username });
         let data: UserProfile = self.request_graphql(query, vars).await?;
         Ok(data.matched_user)
+    }
+
+    /// Retrieves the daily challenge.
+    ///
+    /// # Returns
+    /// The daily problem.
+    pub async fn get_daily_challenge(&self) -> Result<DailyChallenge> {
+        let query = include_str!("../queries/get_daily_challenge.graphql");
+        let data: DailyChallengeOuter = self.request_graphql(query, {}).await?;
+        Ok(data.active_daily_coding_challenge_question)
     }
 
     /// Retrieves a problem.
