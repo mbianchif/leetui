@@ -1,9 +1,10 @@
+use api::{Difficulty, ProblemStatus};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style},
+    style::{Color, Style, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
 };
 
 use crate::app::App;
@@ -54,13 +55,34 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
             Color::Reset
         };
 
-        let row_style = Style::default().bg(bg).fg(Color::Gray);
+        let is_premium_user = app
+            .user_status
+            .as_ref()
+            .map(|user| user.is_premium)
+            .unwrap_or_default();
+
+        let style = Style::default();
+        let title_style = match p.status {
+            Some(ProblemStatus::Accepted) => style.fg(Color::DarkGray).italic(),
+            Some(ProblemStatus::Attempted) => style.fg(Color::Rgb(255, 160, 80)),
+            _ if !is_premium_user && p.paid_only => style.fg(Color::Rgb(0, 255, 150)),
+            _ => style.fg(Color::White),
+        };
+
+        let style = Style::default();
+        let diff_style = match p.difficulty {
+            Difficulty::Easy => style.fg(Color::White),
+            Difficulty::Medium => style.fg(Color::Gray),
+            Difficulty::Hard => style.fg(Color::DarkGray),
+        };
+
+        let row_style = Style::default().bg(bg);
 
         Row::new(vec![
-            format!(" {}", p.frontend_question_id),
-            p.title.clone(),
-            format!("{:?}", p.difficulty),
-            format!("{:.1}%", p.ac_rate),
+            Cell::from(format!(" {}", p.frontend_question_id).fg(Color::DarkGray)),
+            Cell::from(format!("{}", p.title)).style(title_style),
+            Cell::from(format!("{:?}", p.difficulty)).style(diff_style),
+            Cell::from(format!("{:.1}%", p.ac_rate)).fg(Color::DarkGray),
         ])
         .style(row_style)
     });
@@ -75,7 +97,7 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
         ],
     )
     .header(header)
-    .highlight_symbol("▎");
+    .highlight_symbol("▎".fg(Color::Gray));
 
     f.render_stateful_widget(table, rect, &mut app.table_state);
 }

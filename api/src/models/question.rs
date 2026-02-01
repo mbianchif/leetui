@@ -71,7 +71,7 @@ pub struct ProblemSummary {
     pub frontend_question_id: String,
     pub is_favor: bool,
     pub paid_only: bool,
-    pub status: Option<String>,
+    pub status: Option<ProblemStatus>,
     pub title: String,
     pub title_slug: String,
     pub topic_tags: Vec<TopicTag>,

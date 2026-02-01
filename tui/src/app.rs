@@ -18,6 +18,8 @@ pub enum View {
 pub enum Action {
     MoveUp,
     MoveDown,
+    PageUp,
+    PageDown,
 
     UserStatusLoaded(UserStatus),
     UserProfileLoaded(MatchedUser),
@@ -71,8 +73,10 @@ impl App {
 
     pub fn update(&mut self, action: Action) -> bool {
         match action {
-            Action::MoveUp if !self.problems.is_empty() => self.prev(),
-            Action::MoveDown if !self.problems.is_empty() => self.next(),
+            Action::MoveUp if !self.problems.is_empty() => self.move_up(1),
+            Action::MoveDown if !self.problems.is_empty() => self.move_down(1),
+            Action::PageUp if !self.problems.is_empty() => self.move_up(20),
+            Action::PageDown if !self.problems.is_empty() => self.move_down(20),
             Action::UserStatusLoaded(status) => {
                 let username = status.username.clone();
                 self.is_loading = true;
@@ -112,11 +116,11 @@ impl App {
         });
     }
 
-    fn next(&mut self) {
+    fn move_down(&mut self, amount: usize) {
         let i = self
             .table_state
             .selected()
-            .map(|i| (i + 1).min(self.problems.len().saturating_sub(1)))
+            .map(|i| (i + amount).min(self.problems.len().saturating_sub(1)))
             .unwrap_or_default();
 
         self.table_state.select(Some(i));
@@ -136,11 +140,11 @@ impl App {
         }
     }
 
-    fn prev(&mut self) {
+    fn move_up(&mut self, amount: usize) {
         let i = self
             .table_state
             .selected()
-            .map(|i| i.saturating_sub(1).max(0))
+            .map(|i| i.saturating_sub(amount).max(0))
             .unwrap_or_default();
 
         self.table_state.select(Some(i));
