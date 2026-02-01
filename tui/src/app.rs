@@ -98,6 +98,7 @@ impl App {
             (KeyCode::Char('d'), KeyModifiers::CONTROL) => self.move_down(20),
             (KeyCode::Char('u'), KeyModifiers::CONTROL) => self.move_up(20),
             (KeyCode::Char('/'), _) => {
+                self.input.clear();
                 self.input_mode = SearchInputMode::Editing;
             }
             _ => {}
