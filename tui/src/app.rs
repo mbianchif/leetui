@@ -26,6 +26,7 @@ pub enum Action {
     UserStatusLoaded(UserStatus),
     UserProfileLoaded(MatchedUser),
     ProblemListLoaded(Vec<ProblemSummary>),
+    DailyChallengeLoaded(ProblemSummary),
 
     NetworkError(String),
 }
@@ -51,6 +52,7 @@ pub struct App {
     pub input_mode: SearchInputMode,
 
     // problem list
+    pub daily_challenge: Option<ProblemSummary>,
     pub problems: Vec<ProblemSummary>,
     pub table_state: TableState,
     pub known_ids: HashSet<String>,
@@ -73,9 +75,11 @@ impl App {
             input_mode: SearchInputMode::Normal,
             known_ids: HashSet::new(),
             has_more: true,
+            daily_challenge: None,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
+        app.send_request(ClientRequest::FetchDailyChallenge);
         app.send_request(ClientRequest::FetchProblems {
             skip: 0,
             limit: 100,
@@ -100,7 +104,14 @@ impl App {
                 self.input.clear();
                 self.input_mode = SearchInputMode::Editing;
             }
-            (KeyCode::Esc, _) => return false,
+            (KeyCode::Char('g'), _) => {
+                self.table_state.select(Some(0));
+            }
+            (KeyCode::Char('G'), _) => {
+                let last = self.problems.len().saturating_sub(1);
+                self.table_state.select(Some(last));
+            }
+            (KeyCode::Char('q'), _) => return false,
             _ => {}
         };
 
@@ -152,7 +163,7 @@ impl App {
                 self.is_loading = false;
             }
             Action::ProblemListLoaded(problems) => {
-                self.has_more = problems.len() == 50;
+                self.has_more = problems.len() >= 50;
 
                 for p in problems {
                     if !self.known_ids.contains(&p.frontend_question_id) {
@@ -166,6 +177,9 @@ impl App {
                 }
 
                 self.is_loading = false;
+            }
+            Action::DailyChallengeLoaded(problem) => {
+                self.daily_challenge = Some(problem);
             }
             Action::Tick if self.is_loading => {
                 self.spinner_index = self.spinner_index.wrapping_add(1);
@@ -236,6 +250,8 @@ impl App {
                 Constraint::Length(1), // padding
                 Constraint::Length(1), // search bar
                 Constraint::Length(1), // padding
+                Constraint::Length(3), // daily
+                Constraint::Length(1), // padding
                 Constraint::Min(0),    // problem list
                 Constraint::Length(1), // padding
                 Constraint::Length(1), // controls
@@ -244,8 +260,9 @@ impl App {
 
         render::user_profile(f, main_chunks[1], self);
         render::search_bar(f, main_chunks[3], self);
-        render::problem_list(f, main_chunks[5], self);
-        render::home_controls(f, main_chunks[7], self);
+        render::daily_challenge(f, main_chunks[5], self);
+        render::problem_list(f, main_chunks[7], self);
+        render::home_controls(f, main_chunks[9], self);
 
         if let Some(ref err) = self.error_message {
             let error_display = Paragraph::new(err.as_str())

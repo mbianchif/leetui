@@ -30,7 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let (client_tx, client_rx) = mpsc::channel(10);
     let (action_tx, mut action_rx) = mpsc::channel(100);
-    let throbber_interval = time::interval(Duration::from_millis(60));
+    let throbber_interval = time::interval(Duration::from_millis(30));
     let client = LeetCodeClient::new(session, csrf)?;
 
     // Initialize the input handlers.

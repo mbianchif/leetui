@@ -36,6 +36,7 @@ pub enum ClientRequest {
         limit: usize,
         search: Option<String>,
     },
+    FetchDailyChallenge,
 }
 
 pub async fn spawn_client(
@@ -68,6 +69,10 @@ pub async fn spawn_client(
                 .search_problem(skip, limit, &keywords)
                 .await
                 .map(|p| Action::ProblemListLoaded(p.questions)),
+            ClientRequest::FetchDailyChallenge => client
+                .get_daily_challenge()
+                .await
+                .map(|p| Action::DailyChallengeLoaded(p.question)),
         };
 
         match result {

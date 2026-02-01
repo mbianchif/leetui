@@ -59,6 +59,54 @@ pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut App) {
     }
 }
 
+pub fn daily_challenge(f: &mut Frame, rect: Rect, app: &App) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" DAILY CHALLENGE ")
+        .border_style(Style::default().fg(Color::Rgb(255, 160, 80)));
+
+    match &app.daily_challenge {
+        Some(p) => {
+            let style = Style::default();
+            let title_style = match p.status {
+                Some(ProblemStatus::Accepted) => style.fg(Color::DarkGray).italic(),
+                Some(ProblemStatus::Attempted) => style.fg(Color::Rgb(255, 160, 80)),
+                _ => style.fg(Color::White),
+            };
+
+            let diff_style = match p.difficulty {
+                api::Difficulty::Easy => Style::default().fg(Color::White),
+                api::Difficulty::Medium => Style::default().fg(Color::Gray),
+                api::Difficulty::Hard => Style::default().fg(Color::DarkGray),
+            };
+
+            let row = Row::new(vec![
+                Cell::from(format!(" {}", p.frontend_question_id)).fg(Color::DarkGray),
+                Cell::from(p.title.clone()).style(title_style),
+                Cell::from(format!("{:?}", p.difficulty)).style(diff_style),
+                Cell::from(format!("{:.1}%", p.ac_rate)).fg(Color::DarkGray),
+            ])
+            .height(1);
+
+            let table = Table::new(
+                vec![row],
+                [
+                    Constraint::Length(6),
+                    Constraint::Min(30),
+                    Constraint::Length(10),
+                    Constraint::Length(6),
+                ],
+            )
+            .block(block);
+
+            f.render_widget(table, rect);
+        }
+        None => {
+            f.render_widget(Paragraph::new(" Loading...").block(block), rect);
+        }
+    }
+}
+
 pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
     let header_style = Style::default().fg(Color::Rgb(100, 100, 100)).bold();
     let header = Row::new(vec!["ID", "TITLE", "DIFFICULTY", "STATUS"])
@@ -124,7 +172,7 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
             Constraint::Length(6),
             Constraint::Min(30),
             Constraint::Length(10),
-            Constraint::Length(8),
+            Constraint::Length(7),
         ],
     )
     .header(header)
@@ -165,8 +213,10 @@ pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
 
     let current_keys = match app.input_mode {
         SearchInputMode::Normal => Line::from(vec![
-            Span::styled("esc ", keys_style),
+            Span::styled("q ", keys_style),
             Span::styled("QUIT   ", desc_style),
+            Span::styled("d ", keys_style),
+            Span::styled("DAILY  ", desc_style),
             Span::styled("jk ", keys_style),
             Span::styled("MOVE   ", desc_style),
             Span::styled("/ ", keys_style),
