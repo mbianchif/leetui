@@ -15,26 +15,29 @@ use tokio::{sync::mpsc, time};
 
 use app::{App, handler, picker::PickerApp};
 
+/// Retrieves the needed LeetCode variables to create the `LeetCodeClient` api.
+///
+/// # Returns
+/// The variables or an error if the variables are undefined.
+fn retrieve_leetcode_vars() -> Result<(String, String), &'static str> {
+    let session = env::var("LEETCODE_SESSION").map_err(|_| "LEETCODE_SESSION is not defined")?;
+    let csrf = env::var("CSRF_TOKEN").map_err(|_| "CSRF_TOKEN is not defined")?;
+    Ok((session, csrf))
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let Ok(session) = env::var("LEETCODE_SESSION") else {
-        return Err("LEETCODE_SESSION is not defined".into());
-    };
-
-    let Ok(csrf) = env::var("CSRF_TOKEN") else {
-        return Err("CSRF_TOKEN is not defined".into());
-    };
+    let (session, csrf) = retrieve_leetcode_vars()?;
 
     let (client_tx, client_rx) = mpsc::channel(10);
     let (action_tx, action_rx) = mpsc::channel(100);
     let throbber_interval = time::interval(Duration::from_millis(30));
     let client = LeetCodeClient::new(session, csrf)?;
 
-    // Initialize the input handlers.
+    // Initialize the input listeners.
     tokio::spawn(handler::spawn_keyboard(action_tx.clone()));
     tokio::spawn(handler::spawn_ticker(action_tx.clone(), throbber_interval));
     tokio::spawn(handler::spawn_client(action_tx, client_rx, client));
-    let mut app = PickerApp::new(client_tx).await;
 
     // Setup the terminal backend.
     enable_raw_mode()?;
@@ -43,7 +46,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    app.event_loop(&mut terminal, action_rx).await?;
+    if env::args().find(|arg| arg == "--editor").is_some() {
+        // do nothing yet...
+    } else {
+        let mut app = PickerApp::new(client_tx).await;
+        app.event_loop(&mut terminal, action_rx).await?;
+    }
 
     // Cleanup.
     disable_raw_mode()?;

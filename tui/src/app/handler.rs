@@ -31,7 +31,7 @@ pub async fn spawn_keyboard(tx: Sender<Action>) {
 pub async fn spawn_ticker(tx: Sender<Action>, mut interval: Interval) {
     loop {
         interval.tick().await;
-        let _ = tx.send(Action::Tick).await;
+        let _ = tx.try_send(Action::Tick).await;
     }
 }
 
