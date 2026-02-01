@@ -9,6 +9,10 @@ use tokio::{
 
 use crate::app::Action;
 
+/// Creates the keyboard listener future.
+///
+/// # Arguments
+/// * `tx` - A sending end to send the key events to the application.
 pub async fn spawn_keyboard(tx: Sender<Action>) {
     while !tx.is_closed() {
         if event::poll(Duration::from_millis(8)).unwrap_or_default() {
@@ -19,6 +23,11 @@ pub async fn spawn_keyboard(tx: Sender<Action>) {
     }
 }
 
+/// Creates the ticker listener future.
+///
+/// # Arguments
+/// * `tx` - A sending end to send the tick events to the application.
+/// * `interval` - The interval to sleep in between ticks.
 pub async fn spawn_ticker(tx: Sender<Action>, mut interval: Interval) {
     loop {
         interval.tick().await;
@@ -26,6 +35,7 @@ pub async fn spawn_ticker(tx: Sender<Action>, mut interval: Interval) {
     }
 }
 
+/// The variants of requests the application can make to the client listener.
 pub enum ClientRequest {
     FetchProfile {
         username: String,
@@ -39,11 +49,17 @@ pub enum ClientRequest {
     FetchDailyChallenge,
 }
 
+/// Creates the client listener future.
+///
+/// # Arguments
+/// * `tx` - A sending end to send the leetcode api responses to the application.
+/// * `rx` - A receiving end to receive the application requests.
+/// * `client` - The LeetCode api abstraction.
 pub async fn spawn_client(
     tx: Sender<Action>,
-    client: LeetCodeClient,
     mut rx: Receiver<ClientRequest>,
-) -> api::Result<()> {
+    client: LeetCodeClient,
+) {
     while let Some(req) = rx.recv().await {
         let result = match req {
             ClientRequest::FetchUserStatus => {
@@ -84,6 +100,4 @@ pub async fn spawn_client(
             }
         }
     }
-
-    Ok(())
 }

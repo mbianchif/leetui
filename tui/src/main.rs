@@ -1,6 +1,4 @@
 mod app;
-mod handler;
-mod render;
 
 use std::{env, error::Error, io, time::Duration};
 
@@ -15,8 +13,7 @@ use ratatui::{
 };
 use tokio::{sync::mpsc, time};
 
-use app::App;
-use handler::{spawn_client, spawn_keyboard, spawn_ticker};
+use app::{App, handler, picker::PickerApp};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -29,15 +26,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let (client_tx, client_rx) = mpsc::channel(10);
-    let (action_tx, mut action_rx) = mpsc::channel(100);
+    let (action_tx, action_rx) = mpsc::channel(100);
     let throbber_interval = time::interval(Duration::from_millis(30));
     let client = LeetCodeClient::new(session, csrf)?;
 
     // Initialize the input handlers.
-    tokio::spawn(spawn_keyboard(action_tx.clone()));
-    tokio::spawn(spawn_ticker(action_tx.clone(), throbber_interval));
-    tokio::spawn(spawn_client(action_tx, client, client_rx));
-    let mut app = App::new(client_tx).await;
+    tokio::spawn(handler::spawn_keyboard(action_tx.clone()));
+    tokio::spawn(handler::spawn_ticker(action_tx.clone(), throbber_interval));
+    tokio::spawn(handler::spawn_client(action_tx, client_rx, client));
+    let mut app = PickerApp::new(client_tx).await;
 
     // Setup the terminal backend.
     enable_raw_mode()?;
@@ -46,15 +43,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Run event loop.
-    loop {
-        terminal.draw(|f| app.render(f))?;
-        if let Some(action) = action_rx.recv().await {
-            if !app.update(action) {
-                break;
-            }
-        }
-    }
+    app.event_loop(&mut terminal, action_rx).await?;
 
     // Cleanup.
     disable_raw_mode()?;

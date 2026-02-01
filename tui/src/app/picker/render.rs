@@ -7,9 +7,15 @@ use ratatui::{
     widgets::{Block, Borders, Cell, HighlightSpacing, Paragraph, Row, Table},
 };
 
-use crate::app::{App, SearchInputMode};
+use super::{InputMode, PickerApp};
 
-pub fn user_profile(f: &mut Frame, rect: Rect, app: &mut App) {
+/// Renders the user's profile into the given frame.
+///
+/// # Arguments
+/// * `f` - The frame to render the widgets.
+/// * `rect` - A rectangle to insert widgets.
+/// * `app` - The main application.
+pub fn user_profile(f: &mut Frame, rect: Rect, app: &mut PickerApp) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Min(0), Constraint::Length(45)])
@@ -29,8 +35,14 @@ pub fn user_profile(f: &mut Frame, rect: Rect, app: &mut App) {
     };
 }
 
-pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut App) {
-    let color = if matches!(app.input_mode, SearchInputMode::Editing) {
+/// Renders the search bar into the given frame.
+///
+/// # Arguments
+/// * `f` - The frame to render the widgets.
+/// * `rect` - A rectangle to insert widgets.
+/// * `app` - The main application.
+pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut PickerApp) {
+    let color = if matches!(app.input_mode, InputMode::Searching) {
         Color::Rgb(0, 255, 150)
     } else {
         Color::Rgb(100, 100, 100)
@@ -41,8 +53,7 @@ pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut App) {
         .borders(Borders::LEFT)
         .border_style(border_style);
 
-    let display_text = if app.input.is_empty() && matches!(app.input_mode, SearchInputMode::Normal)
-    {
+    let display_text = if app.input.is_empty() && matches!(app.input_mode, InputMode::Normal) {
         "  Type '/' to search...".to_string()
     } else {
         format!("  {}", app.input)
@@ -54,12 +65,18 @@ pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut App) {
 
     f.render_widget(search_text, rect);
 
-    if matches!(app.input_mode, SearchInputMode::Editing) {
+    if matches!(app.input_mode, InputMode::Searching) {
         f.set_cursor_position((rect.x + app.input.len() as u16 + 3, rect.y));
     }
 }
 
-pub fn daily_challenge(f: &mut Frame, rect: Rect, app: &App) {
+/// Renders the daily challenge section into the given frame.
+///
+/// # Arguments
+/// * `f` - The frame to render the widgets.
+/// * `rect` - A rectangle to insert widgets.
+/// * `app` - The main application.
+pub fn daily_challenge(f: &mut Frame, rect: Rect, app: &PickerApp) {
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" DAILY CHALLENGE ")
@@ -107,7 +124,13 @@ pub fn daily_challenge(f: &mut Frame, rect: Rect, app: &App) {
     }
 }
 
-pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
+/// Renders the problem list into the given frame.
+///
+/// # Arguments
+/// * `f` - The frame to render the widgets.
+/// * `rect` - A rectangle to insert widgets.
+/// * `app` - The main application.
+pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut PickerApp) {
     let header_style = Style::default().fg(Color::Rgb(100, 100, 100)).bold();
     let header = Row::new(vec!["ID", "TITLE", "DIFFICULTY", "STATUS"])
         .style(header_style)
@@ -179,14 +202,20 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
     .highlight_spacing(HighlightSpacing::Always)
     .highlight_symbol("▎".set_style(Color::Rgb(100, 100, 100)));
 
-    if matches!(app.input_mode, SearchInputMode::Normal) {
+    if matches!(app.input_mode, InputMode::Normal) {
         table = table.row_highlight_style(highligh_style);
     }
 
     f.render_stateful_widget(table, rect, &mut app.table_state);
 }
 
-pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
+/// Renders the controls into the given frame.
+///
+/// # Arguments
+/// * `f` - The frame to render the widgets.
+/// * `rect` - A rectangle to insert widgets.
+/// * `app` - The main application.
+pub fn controls(f: &mut Frame, rect: Rect, app: &mut PickerApp) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(20), Constraint::Min(0)])
@@ -212,7 +241,7 @@ pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
     let desc_style = Style::default().fg(Color::DarkGray);
 
     let current_keys = match app.input_mode {
-        SearchInputMode::Normal => Line::from(vec![
+        InputMode::Normal => Line::from(vec![
             Span::styled("q ", keys_style),
             Span::styled("QUIT   ", desc_style),
             Span::styled("d ", keys_style),
@@ -224,7 +253,7 @@ pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
             Span::styled("enter ", keys_style),
             Span::styled("SELECT  ", desc_style),
         ]),
-        SearchInputMode::Editing => Line::from(vec![
+        InputMode::Searching => Line::from(vec![
             Span::styled("esc ", keys_style),
             Span::styled("CANCEL   ", desc_style),
             Span::styled("enter ", keys_style),
