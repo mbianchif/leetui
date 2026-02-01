@@ -1,6 +1,7 @@
 use api::{MatchedUser, ProblemSummary, UserStatus};
 use ratatui::{
     Frame,
+    crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     widgets::{Block, Borders, Paragraph, TableState, Wrap},
@@ -16,10 +17,7 @@ pub enum View {
 }
 
 pub enum Action {
-    MoveUp,
-    MoveDown,
-    PageUp,
-    PageDown,
+    Key(event::KeyEvent),
 
     UserStatusLoaded(UserStatus),
     UserProfileLoaded(MatchedUser),
@@ -31,16 +29,31 @@ pub enum Action {
     NetworkError(String),
 }
 
+pub enum SearchInputMode {
+    Normal,
+    Editing,
+}
+
 pub struct App {
     pub view: View,
-    pub problems: Vec<ProblemSummary>,
-    pub table_state: TableState,
     pub user_status: Option<UserStatus>,
     pub user_data: Option<MatchedUser>,
-    pub is_loading: bool,
-    pub spinner_index: usize,
     pub error_message: Option<String>,
     pub client_tx: Sender<ClientRequest>,
+
+    // throbber
+    pub is_loading: bool,
+    pub spinner_index: usize,
+
+    // search bar
+    pub input: String,
+    pub input_mode: SearchInputMode,
+    pub cursor_position: usize,
+    pub last_selected: Option<usize>,
+
+    // problem list
+    pub problems: Vec<ProblemSummary>,
+    pub table_state: TableState,
 }
 
 impl App {
@@ -55,6 +68,10 @@ impl App {
             spinner_index: 0,
             error_message: None,
             client_tx,
+            input: String::new(),
+            input_mode: SearchInputMode::Normal,
+            cursor_position: 0,
+            last_selected: None,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
@@ -71,12 +88,46 @@ impl App {
         }
     }
 
+    fn handle_home_normal_keys(&mut self, key: KeyEvent) -> bool {
+        match (key.code, key.modifiers) {
+            (KeyCode::Char('q'), _) => return false,
+            (KeyCode::Char('j'), _) => self.move_down(1),
+            (KeyCode::Char('k'), _) => self.move_up(1),
+            (KeyCode::Char('d'), KeyModifiers::CONTROL) => self.move_down(20),
+            (KeyCode::Char('u'), KeyModifiers::CONTROL) => self.move_up(20),
+            (KeyCode::Char('/'), _) => {
+                self.input_mode = SearchInputMode::Editing;
+                // self.last_selected = self.table_state.selected();
+                // self.table_state.select(None);
+            }
+            _ => {}
+        };
+
+        true
+    }
+
+    fn handle_home_editing_keys(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Enter | KeyCode::Esc => {
+                self.input_mode = SearchInputMode::Normal;
+                // self.table_state.select(self.last_selected.take());
+            }
+            KeyCode::Char(ch) => {
+                self.input.push(ch);
+            }
+            KeyCode::Backspace => {
+                self.input.pop();
+            }
+            _ => {}
+        }
+    }
+
     pub fn update(&mut self, action: Action) -> bool {
         match action {
-            Action::MoveUp if !self.problems.is_empty() => self.move_up(1),
-            Action::MoveDown if !self.problems.is_empty() => self.move_down(1),
-            Action::PageUp if !self.problems.is_empty() => self.move_up(20),
-            Action::PageDown if !self.problems.is_empty() => self.move_down(20),
+            Action::Key(key) => match self.input_mode {
+                SearchInputMode::Normal => return self.handle_home_normal_keys(key),
+                SearchInputMode::Editing => self.handle_home_editing_keys(key),
+            },
             Action::UserStatusLoaded(status) => {
                 let username = status.username.clone();
                 self.is_loading = true;
@@ -104,7 +155,7 @@ impl App {
             }
             Action::Quit => return false,
             _ => {}
-        };
+        }
 
         true
     }

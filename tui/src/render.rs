@@ -2,12 +2,12 @@ use api::{Difficulty, ProblemStatus};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Style, Styled, Stylize},
     text::{Line, Span},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, HighlightSpacing, Paragraph, Row, Table},
 };
 
-use crate::app::App;
+use crate::app::{App, SearchInputMode};
 
 pub fn user_profile(f: &mut Frame, rect: Rect, app: &mut App) {
     let chunks = Layout::default()
@@ -29,16 +29,34 @@ pub fn user_profile(f: &mut Frame, rect: Rect, app: &mut App) {
     };
 }
 
-pub fn search_bar(f: &mut Frame, rect: Rect, _app: &mut App) {
+pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut App) {
+    let color = if matches!(app.input_mode, SearchInputMode::Editing) {
+        Color::Rgb(0, 255, 150)
+    } else {
+        Color::Rgb(100, 100, 100)
+    };
+
+    let border_style = Style::default().fg(color);
     let block = Block::default()
         .borders(Borders::LEFT)
-        .border_style(Style::default().fg(Color::Rgb(100, 100, 100)));
+        .border_style(border_style);
 
-    let search_text = Paragraph::new("  Type '/' to search...")
+    let display_text = if app.input.is_empty() && matches!(app.input_mode, SearchInputMode::Normal)
+    {
+        "  Type '/' to search...".to_string()
+    } else {
+        format!("  {}", app.input)
+    };
+
+    let search_text = Paragraph::new(display_text)
         .style(Style::default().fg(Color::Gray))
         .block(block);
 
     f.render_widget(search_text, rect);
+
+    if matches!(app.input_mode, SearchInputMode::Editing) {
+        f.set_cursor_position((rect.x + app.input.len() as u16 + 3, rect.y));
+    }
 }
 
 pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
@@ -61,12 +79,20 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
             .map(|user| user.is_premium)
             .unwrap_or_default();
 
+        let is_locked = !is_premium_user && p.paid_only;
+
         let style = Style::default();
         let title_style = match p.status {
             Some(ProblemStatus::Accepted) => style.fg(Color::DarkGray).italic(),
+            _ if is_locked => style.fg(Color::Rgb(80, 80, 80)),
             Some(ProblemStatus::Attempted) => style.fg(Color::Rgb(255, 160, 80)),
-            _ if !is_premium_user && p.paid_only => style.fg(Color::Rgb(0, 255, 150)),
             _ => style.fg(Color::White),
+        };
+
+        let title_content = if p.paid_only {
+            format!("{} ", p.title)
+        } else {
+            p.title.clone()
         };
 
         let style = Style::default();
@@ -80,14 +106,19 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
 
         Row::new(vec![
             Cell::from(format!(" {}", p.frontend_question_id).fg(Color::DarkGray)),
-            Cell::from(format!("{}", p.title)).style(title_style),
+            Cell::from(title_content).style(title_style),
             Cell::from(format!("{:?}", p.difficulty)).style(diff_style),
             Cell::from(format!("{:.1}%", p.ac_rate)).fg(Color::DarkGray),
         ])
         .style(row_style)
     });
 
-    let table = Table::new(
+    let highligh_style = Style::default()
+        .bg(Color::Rgb(60, 60, 60))
+        .fg(Color::Rgb(0, 255, 150))
+        .bold();
+
+    let mut table = Table::new(
         rows,
         [
             Constraint::Length(4),
@@ -97,7 +128,12 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
         ],
     )
     .header(header)
-    .highlight_symbol("▎".fg(Color::Gray));
+    .highlight_spacing(HighlightSpacing::Always)
+    .highlight_symbol("▎".set_style(Color::Rgb(100, 100, 100)));
+
+    if matches!(app.input_mode, SearchInputMode::Normal) {
+        table = table.row_highlight_style(highligh_style);
+    }
 
     f.render_stateful_widget(table, rect, &mut app.table_state);
 }

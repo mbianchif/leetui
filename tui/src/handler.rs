@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use api::LeetCodeClient;
-use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use ratatui::crossterm::event::{self, Event};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::Interval,
@@ -12,17 +12,8 @@ use crate::app::Action;
 pub async fn spawn_keyboard(tx: Sender<Action>) {
     while !tx.is_closed() {
         if event::poll(Duration::from_millis(16)).unwrap_or_default() {
-            if let Event::Key(key) = event::read().unwrap() {
-                let action = match (key.code, key.modifiers) {
-                    (KeyCode::Char('q'), _) => Action::Quit,
-                    (KeyCode::Char('j'), _) => Action::MoveDown,
-                    (KeyCode::Char('k'), _) => Action::MoveUp,
-                    (KeyCode::Char('d'), KeyModifiers::CONTROL) => Action::PageDown,
-                    (KeyCode::Char('u'), KeyModifiers::CONTROL) => Action::PageUp,
-                    _ => continue,
-                };
-
-                let _ = tx.send(action).await;
+            if let Event::Key(key_event) = event::read().unwrap() {
+                let _ = tx.send(Action::Key(key_event)).await;
             }
         }
     }
