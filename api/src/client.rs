@@ -123,7 +123,7 @@ impl LeetCodeClient {
             "categorySlug": "",
             "skip": skip,
             "limit": limit,
-            "filters": ""
+            "filters": {},
         });
 
         let data: QuestionListOuter = self.request_graphql(query, vars).await?;
