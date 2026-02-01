@@ -1,49 +1,62 @@
 mod app;
+mod handler;
 mod render;
 
-use std::{error::Error, io};
+use std::{env, error::Error, io, time::Duration};
 
+use api::LeetCodeClient;
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     crossterm::{
-        event::{self, Event, KeyCode},
         execute,
         terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
     },
 };
+use tokio::{sync::mpsc, time};
 
 use app::App;
+use handler::{spawn_client, spawn_keyboard, spawn_ticker};
 
-use crate::app::View;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let Ok(session) = env::var("LEETCODE_SESSION") else {
+        return Err("LEETCODE_SESSION is not defined".into());
+    };
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let mut stdout = io::stdout();
+    let Ok(csrf) = env::var("CSRF_TOKEN") else {
+        return Err("CSRF_TOKEN is not defined".into());
+    };
 
+    let (client_tx, client_rx) = mpsc::channel(10);
+    let (action_tx, mut action_rx) = mpsc::channel(100);
+    let throbber_interval = time::interval(Duration::from_millis(60));
+    let client = LeetCodeClient::new(session, csrf)?;
+
+    // Initialize the input handlers.
+    tokio::spawn(spawn_keyboard(action_tx.clone()));
+    tokio::spawn(spawn_ticker(action_tx.clone(), throbber_interval));
+    tokio::spawn(spawn_client(action_tx, client, client_rx));
+    let mut app = App::new(client_tx).await;
+
+    // Setup the terminal backend.
     enable_raw_mode()?;
+    let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new();
-
+    // Run event loop.
     loop {
         terminal.draw(|f| app.render(f))?;
-
-        if let Event::Key(key) = event::read()? {
-            match app.view {
-                View::Home => match key.code {
-                    KeyCode::Char('q') => break,
-                    KeyCode::Char('j') | KeyCode::Down => app.next(),
-                    KeyCode::Char('k') | KeyCode::Up => app.prev(),
-
-                    _ => {}
-                },
+        if let Some(action) = action_rx.recv().await {
+            if !app.update(action) {
+                break;
             }
         }
     }
 
-    // -- CLEANUP --
+    // Cleanup.
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     Ok(())

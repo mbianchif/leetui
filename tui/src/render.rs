@@ -14,18 +14,18 @@ pub fn user_profile(f: &mut Frame, rect: Rect, app: &mut App) {
         .constraints([Constraint::Min(0), Constraint::Length(45)])
         .split(rect);
 
-    let Some(ref user_data) = app.user_data else {
-        let span = Span::styled("OFFLINE", Style::default().fg(Color::Rgb(255, 45, 85)));
-        let paragraph = Paragraph::new(span).alignment(Alignment::Right);
-        f.render_widget(paragraph, chunks[1]);
-        return;
+    match app.user_data {
+        Some(ref user) => {
+            let style = Style::default().fg(Color::White).bold();
+            let span = Span::styled(user.username.to_uppercase(), style);
+            f.render_widget(Paragraph::new(span), chunks[0]);
+        }
+        None => {
+            let span = Span::styled("OFFLINE", Style::default().fg(Color::Rgb(255, 45, 85)));
+            let paragraph = Paragraph::new(span).alignment(Alignment::Right);
+            f.render_widget(paragraph, chunks[1]);
+        }
     };
-
-    if let Some(ref user) = user_data.matched_user {
-        let style = Style::default().fg(Color::White).bold();
-        let span = Span::styled(user.username.to_uppercase(), style);
-        f.render_widget(Paragraph::new(span), chunks[0]);
-    }
 }
 
 pub fn search_bar(f: &mut Frame, rect: Rect, _app: &mut App) {
@@ -80,7 +80,28 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
     f.render_stateful_widget(table, rect, &mut app.table_state);
 }
 
-pub fn home_controls(f: &mut Frame, rect: Rect, _app: &mut App) {
+pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(20), Constraint::Min(0)])
+        .split(rect);
+
+    if let Some(..) = app.error_message {
+        let err_text = format!("! ERROR");
+        let style = Style::default().fg(Color::Rgb(255, 45, 85));
+        let span = Span::styled(err_text, style);
+        let paragraph = Paragraph::new(span);
+        f.render_widget(paragraph, chunks[0]);
+    } else if app.is_loading {
+        let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let frame = spinner[app.spinner_index % spinner.len()];
+        let loading_text = format!(" {frame} FETCHING");
+        let style = Style::default().fg(Color::Rgb(0, 255, 150));
+        let span = Span::styled(loading_text, style);
+        let paragraph = Paragraph::new(span);
+        f.render_widget(paragraph, chunks[0]);
+    }
+
     let keys_style = Style::default().fg(Color::Gray);
     let desc_style = Style::default().fg(Color::DarkGray);
 

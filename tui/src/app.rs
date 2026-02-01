@@ -1,11 +1,13 @@
-use api::{ProblemSummary, UserProfile};
+use api::{MatchedUser, ProblemSummary, UserStatus};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
-    widgets::TableState,
+    style::{Color, Style},
+    widgets::{Block, Borders, Paragraph, TableState, Wrap},
 };
+use tokio::sync::mpsc::Sender;
 
-use crate::render;
+use crate::{handler::ClientRequest, render};
 
 #[derive(Default)]
 pub enum View {
@@ -13,74 +15,52 @@ pub enum View {
     Home,
 }
 
+pub enum Action {
+    MoveUp,
+    MoveDown,
+
+    UserStatusLoaded(UserStatus),
+    UserProfileLoaded(MatchedUser),
+    ProblemListLoaded(Vec<ProblemSummary>),
+
+    Tick,
+    Quit,
+
+    NetworkError(String),
+}
+
 pub struct App {
     pub view: View,
     pub problems: Vec<ProblemSummary>,
     pub table_state: TableState,
-    pub user_data: Option<UserProfile>,
+    pub user_status: Option<UserStatus>,
+    pub user_data: Option<MatchedUser>,
+    pub is_loading: bool,
+    pub spinner_index: usize,
+    pub error_message: Option<String>,
+    pub client_tx: Sender<ClientRequest>,
 }
 
 impl App {
-    pub fn new() -> Self {
-        let mut table_state = TableState::default();
-        table_state.select(Some(0));
-
-        let mock_problems = vec![
-            ProblemSummary {
-                ac_rate: 51.2,
-                difficulty: api::Difficulty::Easy,
-                frontend_question_id: "1".to_string(),
-                is_favor: false,
-                paid_only: false,
-                status: Some("ac".to_string()),
-                title: "Two Sum".to_string(),
-                title_slug: "two-sum".to_string(),
-                topic_tags: vec![],
-            },
-            ProblemSummary {
-                ac_rate: 35.4,
-                difficulty: api::Difficulty::Medium,
-                frontend_question_id: "2".to_string(),
-                is_favor: true,
-                paid_only: false,
-                status: None,
-                title: "Add Two Numbers".to_string(),
-                title_slug: "add-two-numbers".to_string(),
-                topic_tags: vec![],
-            },
-            ProblemSummary {
-                ac_rate: 15.1,
-                difficulty: api::Difficulty::Hard,
-                frontend_question_id: "4".to_string(),
-                is_favor: false,
-                paid_only: false,
-                status: None,
-                title: "Median of Two Sorted Arrays".to_string(),
-                title_slug: "median-of-two-sorted-arrays".to_string(),
-                topic_tags: vec![],
-            },
-        ];
-
-        let user_data = UserProfile {
-            matched_user: Some(api::MatchedUser {
-                username: "LeetCoderPro".to_string(),
-                github_url: Some("username".to_string()),
-                twitter_url: None,
-                linkedin_url: Some("linkedin.com/user".to_string()),
-                profile: api::Profile {
-                    ranking: 154320,
-                    reputation: 42,
-                    user_avatar: "https://assets.leetcode.com/users/avatar.jpg".to_string(),
-                },
-            }),
+    pub async fn new(client_tx: Sender<ClientRequest>) -> Self {
+        let app = Self {
+            view: View::default(),
+            problems: Vec::new(),
+            table_state: TableState::default(),
+            user_status: None,
+            user_data: None,
+            is_loading: true,
+            spinner_index: 0,
+            error_message: None,
+            client_tx,
         };
 
-        Self {
-            view: View::default(),
-            problems: mock_problems,
-            table_state,
-            user_data: Some(user_data),
-        }
+        app.send_request(ClientRequest::FetchUserStatus);
+        app.send_request(ClientRequest::FetchProblems {
+            skip: 0,
+            limit: 100,
+        });
+        app
     }
 
     pub fn render(&mut self, f: &mut Frame) {
@@ -89,33 +69,78 @@ impl App {
         }
     }
 
-    pub fn next(&mut self) {
+    pub fn update(&mut self, action: Action) -> bool {
+        match action {
+            Action::MoveUp if !self.problems.is_empty() => self.prev(),
+            Action::MoveDown if !self.problems.is_empty() => self.next(),
+            Action::UserStatusLoaded(status) => {
+                let username = status.username.clone();
+                self.is_loading = true;
+                self.send_request(ClientRequest::FetchProfile { username });
+                self.user_status = Some(status);
+            }
+            Action::UserProfileLoaded(profile) => {
+                self.user_data = Some(profile);
+                self.is_loading = false;
+            }
+            Action::ProblemListLoaded(problems) => {
+                self.problems.extend(problems);
+                self.is_loading = false;
+
+                if self.table_state.selected().is_none() {
+                    self.table_state.select(Some(0));
+                }
+            }
+            Action::Tick if self.is_loading => {
+                self.spinner_index = self.spinner_index.wrapping_add(1);
+            }
+            Action::NetworkError(e) => {
+                self.is_loading = false;
+                self.error_message = Some(e);
+            }
+            Action::Quit => return false,
+            _ => {}
+        };
+
+        true
+    }
+
+    fn send_request(&self, req: ClientRequest) {
+        let tx = self.client_tx.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(req).await;
+        });
+    }
+
+    fn next(&mut self) {
         let i = self
             .table_state
             .selected()
-            .map(|i| {
-                if i >= self.problems.len().saturating_sub(1) {
-                    0
-                } else {
-                    i + 1
-                }
-            })
+            .map(|i| (i + 1).min(self.problems.len().saturating_sub(1)))
             .unwrap_or_default();
 
         self.table_state.select(Some(i));
+
+        let threshold = 25;
+        if i + threshold >= self.problems.len() && !self.is_loading {
+            self.is_loading = true;
+
+            let tx = self.client_tx.clone();
+            let skip = self.problems.len();
+
+            tokio::spawn(async move {
+                let _ = tx
+                    .send(ClientRequest::FetchProblems { skip, limit: 50 })
+                    .await;
+            });
+        }
     }
 
-    pub fn prev(&mut self) {
+    fn prev(&mut self) {
         let i = self
             .table_state
             .selected()
-            .map(|i| {
-                if i == 0 {
-                    self.problems.len().saturating_sub(1)
-                } else {
-                    i - 1
-                }
-            })
+            .map(|i| i.saturating_sub(1).max(0))
             .unwrap_or_default();
 
         self.table_state.select(Some(i));
@@ -134,19 +159,33 @@ impl App {
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Min(0),
-                Constraint::Length(1),
+                Constraint::Length(1), // padding
+                Constraint::Length(1), // profile
+                Constraint::Length(1), // padding
+                Constraint::Length(1), // search bar
+                Constraint::Length(1), // padding
+                Constraint::Min(0),    // problem list
+                Constraint::Length(1), // padding
+                Constraint::Length(1), // controls
             ])
             .split(outer_layout[1]);
 
         render::user_profile(f, main_chunks[1], self);
         render::search_bar(f, main_chunks[3], self);
         render::problem_list(f, main_chunks[5], self);
-        render::home_controls(f, main_chunks[6], self);
+        render::home_controls(f, main_chunks[7], self);
+
+        if let Some(ref err) = self.error_message {
+            let error_display = Paragraph::new(err.as_str())
+                .block(
+                    Block::default()
+                        .title(" NETWORK ERROR ")
+                        .borders(Borders::ALL),
+                )
+                .style(Style::default().fg(Color::Red))
+                .wrap(Wrap { trim: true });
+
+            f.render_widget(error_display, main_chunks[5]);
+        }
     }
 }
