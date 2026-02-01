@@ -130,6 +130,35 @@ impl LeetCodeClient {
         Ok(data.problemset_question_list)
     }
 
+    /// Retrieves a list of problems that match with the given keywords
+    ///
+    /// # Arguments
+    /// * `skip` - The offset to start the list out of.
+    /// * `limit` - The maximum amount of questions to retrieve at once.
+    /// * `keywords` - A string of keywords to search by.
+    ///
+    /// # Returns
+    /// A list of questions.
+    pub async fn search_problem(
+        &self,
+        skip: usize,
+        limit: usize,
+        keywords: &str,
+    ) -> Result<ProblemsetQuestionList> {
+        let query = include_str!("../queries/get_problem_list.graphql");
+        let vars = json!({
+            "categorySlug": "",
+            "skip": skip,
+            "limit": limit,
+            "filters": {
+                "searchKeywords": keywords,
+            },
+        });
+
+        let data: QuestionListOuter = self.request_graphql(query, vars).await?;
+        Ok(data.problemset_question_list)
+    }
+
     /// Runs the testing code for a certain problem.
     ///
     /// # Arguments

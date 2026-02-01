@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use api::{MatchedUser, ProblemSummary, UserStatus};
 use ratatui::{
     Frame,
@@ -19,12 +21,11 @@ pub enum View {
 pub enum Action {
     Key(event::KeyEvent),
 
+    Tick,
+
     UserStatusLoaded(UserStatus),
     UserProfileLoaded(MatchedUser),
     ProblemListLoaded(Vec<ProblemSummary>),
-
-    Tick,
-    Quit,
 
     NetworkError(String),
 }
@@ -48,12 +49,12 @@ pub struct App {
     // search bar
     pub input: String,
     pub input_mode: SearchInputMode,
-    pub cursor_position: usize,
-    pub last_selected: Option<usize>,
 
     // problem list
     pub problems: Vec<ProblemSummary>,
     pub table_state: TableState,
+    pub known_ids: HashSet<String>,
+    pub has_more: bool,
 }
 
 impl App {
@@ -70,14 +71,15 @@ impl App {
             client_tx,
             input: String::new(),
             input_mode: SearchInputMode::Normal,
-            cursor_position: 0,
-            last_selected: None,
+            known_ids: HashSet::new(),
+            has_more: true,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
         app.send_request(ClientRequest::FetchProblems {
             skip: 0,
             limit: 100,
+            search: None,
         });
         app
     }
@@ -97,8 +99,6 @@ impl App {
             (KeyCode::Char('u'), KeyModifiers::CONTROL) => self.move_up(20),
             (KeyCode::Char('/'), _) => {
                 self.input_mode = SearchInputMode::Editing;
-                // self.last_selected = self.table_state.selected();
-                // self.table_state.select(None);
             }
             _ => {}
         };
@@ -108,15 +108,27 @@ impl App {
 
     fn handle_home_editing_keys(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Enter | KeyCode::Esc => {
-                self.input_mode = SearchInputMode::Normal;
-                // self.table_state.select(self.last_selected.take());
-            }
             KeyCode::Char(ch) => {
                 self.input.push(ch);
             }
             KeyCode::Backspace => {
                 self.input.pop();
+            }
+            KeyCode::Esc => {
+                self.input_mode = SearchInputMode::Normal;
+            }
+            KeyCode::Enter => {
+                self.input_mode = SearchInputMode::Normal;
+                self.problems.clear();
+                self.known_ids.clear();
+                self.is_loading = true;
+                self.has_more = true;
+
+                self.send_request(ClientRequest::FetchProblems {
+                    skip: 0,
+                    limit: 50,
+                    search: Some(self.input.clone()),
+                })
             }
             _ => {}
         }
@@ -139,12 +151,20 @@ impl App {
                 self.is_loading = false;
             }
             Action::ProblemListLoaded(problems) => {
-                self.problems.extend(problems);
-                self.is_loading = false;
+                self.has_more = problems.len() == 50;
+
+                for p in problems {
+                    if !self.known_ids.contains(&p.frontend_question_id) {
+                        self.known_ids.insert(p.frontend_question_id.clone());
+                        self.problems.push(p);
+                    }
+                }
 
                 if self.table_state.selected().is_none() {
                     self.table_state.select(Some(0));
                 }
+
+                self.is_loading = false;
             }
             Action::Tick if self.is_loading => {
                 self.spinner_index = self.spinner_index.wrapping_add(1);
@@ -153,7 +173,6 @@ impl App {
                 self.is_loading = false;
                 self.error_message = Some(e);
             }
-            Action::Quit => return false,
             _ => {}
         }
 
@@ -177,16 +196,13 @@ impl App {
         self.table_state.select(Some(i));
 
         let threshold = 25;
-        if i + threshold >= self.problems.len() && !self.is_loading {
+        if i + threshold >= self.problems.len() && !self.is_loading && self.has_more {
             self.is_loading = true;
 
-            let tx = self.client_tx.clone();
-            let skip = self.problems.len();
-
-            tokio::spawn(async move {
-                let _ = tx
-                    .send(ClientRequest::FetchProblems { skip, limit: 50 })
-                    .await;
+            self.send_request(ClientRequest::FetchProblems {
+                skip: self.problems.len(),
+                limit: 50,
+                search: (!self.input.is_empty()).then_some(self.input.clone()),
             });
         }
     }

@@ -11,7 +11,7 @@ use crate::app::Action;
 
 pub async fn spawn_keyboard(tx: Sender<Action>) {
     while !tx.is_closed() {
-        if event::poll(Duration::from_millis(16)).unwrap_or_default() {
+        if event::poll(Duration::from_millis(8)).unwrap_or_default() {
             if let Event::Key(key_event) = event::read().unwrap() {
                 let _ = tx.send(Action::Key(key_event)).await;
             }
@@ -27,9 +27,15 @@ pub async fn spawn_ticker(tx: Sender<Action>, mut interval: Interval) {
 }
 
 pub enum ClientRequest {
-    FetchProfile { username: String },
+    FetchProfile {
+        username: String,
+    },
     FetchUserStatus,
-    FetchProblems { skip: usize, limit: usize },
+    FetchProblems {
+        skip: usize,
+        limit: usize,
+        search: Option<String>,
+    },
 }
 
 pub async fn spawn_client(
@@ -46,8 +52,20 @@ pub async fn spawn_client(
                 .get_profile(&username)
                 .await
                 .map(Action::UserProfileLoaded),
-            ClientRequest::FetchProblems { skip, limit } => client
+            ClientRequest::FetchProblems {
+                skip,
+                limit,
+                search: None,
+            } => client
                 .get_problem_list(skip, limit)
+                .await
+                .map(|p| Action::ProblemListLoaded(p.questions)),
+            ClientRequest::FetchProblems {
+                skip,
+                limit,
+                search: Some(keywords),
+            } => client
+                .search_problem(skip, limit, &keywords)
                 .await
                 .map(|p| Action::ProblemListLoaded(p.questions)),
         };

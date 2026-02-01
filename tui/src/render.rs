@@ -121,7 +121,7 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
     let mut table = Table::new(
         rows,
         [
-            Constraint::Length(4),
+            Constraint::Length(6),
             Constraint::Min(30),
             Constraint::Length(10),
             Constraint::Length(8),
