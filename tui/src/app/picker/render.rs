@@ -54,16 +54,14 @@ pub fn search_bar(f: &mut Frame, rect: Rect, app: &mut PickerApp) {
         .border_style(border_style);
 
     let display_text = if app.input.is_empty() && matches!(app.input_mode, InputMode::Normal) {
-        "  Type '/' to search...".to_string()
+        "  Type '/' to search...".fg(Color::Gray)
     } else {
         format!("  {}", app.input)
+            .fg(Color::Rgb(0, 255, 150))
+            .bold()
     };
 
-    let search_text = Paragraph::new(display_text)
-        .style(Style::default().fg(Color::Gray))
-        .block(block);
-
-    f.render_widget(search_text, rect);
+    f.render_widget(Paragraph::new(display_text).block(block), rect);
 
     if matches!(app.input_mode, InputMode::Searching) {
         f.set_cursor_position((rect.x + app.input.len() as u16 + 3, rect.y));
@@ -242,14 +240,12 @@ pub fn controls(f: &mut Frame, rect: Rect, app: &mut PickerApp) {
 
     let current_keys = match app.input_mode {
         InputMode::Normal => Line::from(vec![
-            Span::styled("q ", keys_style),
+            Span::styled("esc ", keys_style),
             Span::styled("QUIT   ", desc_style),
             Span::styled("d ", keys_style),
             Span::styled("DAILY  ", desc_style),
             Span::styled("jk ", keys_style),
             Span::styled("MOVE   ", desc_style),
-            Span::styled("/ ", keys_style),
-            Span::styled("SEARCH   ", desc_style),
             Span::styled("enter ", keys_style),
             Span::styled("SELECT  ", desc_style),
         ]),

@@ -114,7 +114,7 @@ impl PickerApp {
                 let last = self.problems.len().saturating_sub(1);
                 self.table_state.select(Some(last));
             }
-            (KeyCode::Char('q'), _) => return false,
+            (KeyCode::Esc, _) => return false,
             _ => {}
         };
 
