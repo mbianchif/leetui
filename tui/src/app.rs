@@ -92,7 +92,6 @@ impl App {
 
     fn handle_home_normal_keys(&mut self, key: KeyEvent) -> bool {
         match (key.code, key.modifiers) {
-            (KeyCode::Char('q'), _) => return false,
             (KeyCode::Char('j'), _) => self.move_down(1),
             (KeyCode::Char('k'), _) => self.move_up(1),
             (KeyCode::Char('d'), KeyModifiers::CONTROL) => self.move_down(20),
@@ -101,6 +100,7 @@ impl App {
                 self.input.clear();
                 self.input_mode = SearchInputMode::Editing;
             }
+            (KeyCode::Esc, _) => return false,
             _ => {}
         };
 

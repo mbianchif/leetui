@@ -163,16 +163,24 @@ pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
     let keys_style = Style::default().fg(Color::Gray);
     let desc_style = Style::default().fg(Color::DarkGray);
 
-    let current_keys = Line::from(vec![
-        Span::styled(" q ", keys_style),
-        Span::styled("QUIT  ", desc_style),
-        Span::styled(" jk ", keys_style),
-        Span::styled("MOVE  ", desc_style),
-        Span::styled(" / ", keys_style),
-        Span::styled("SEARCH  ", desc_style),
-        Span::styled(" enter ", keys_style),
-        Span::styled("SELECT ", desc_style),
-    ]);
+    let current_keys = match app.input_mode {
+        SearchInputMode::Normal => Line::from(vec![
+            Span::styled("esc ", keys_style),
+            Span::styled("QUIT   ", desc_style),
+            Span::styled("jk ", keys_style),
+            Span::styled("MOVE   ", desc_style),
+            Span::styled("/ ", keys_style),
+            Span::styled("SEARCH   ", desc_style),
+            Span::styled("enter ", keys_style),
+            Span::styled("SELECT  ", desc_style),
+        ]),
+        SearchInputMode::Editing => Line::from(vec![
+            Span::styled("esc ", keys_style),
+            Span::styled("CANCEL   ", desc_style),
+            Span::styled("enter ", keys_style),
+            Span::styled("CONFIRM   ", desc_style),
+        ]),
+    };
 
     let help = Paragraph::new(current_keys).alignment(Alignment::Center);
 
