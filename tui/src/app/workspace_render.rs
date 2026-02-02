@@ -1,9 +1,9 @@
 use ratatui::{
     Frame,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
-    text::Span,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
 };
 
@@ -38,17 +38,18 @@ pub fn file_selector(f: &mut Frame, rect: Rect, app: &mut App) {
         let text = " EMPTY WORKSPACE ";
         let text_len = text.len();
 
+        let h_padding = 1;
+        let area_w = text_len as u16 + h_padding;
         let area_h = 3;
-        let area_w = text_len as u16 + 2;
 
-        let x = inner_area.x + inner_area.width.saturating_sub(area_w) / 2 - 1;
+        let x = inner_area.x + inner_area.width.saturating_sub(area_w) / 2;
         let y = inner_area.y + inner_area.height.saturating_sub(area_h) / 2;
 
         let message_area = Rect::new(x, y, area_w, area_h);
         f.render_widget(Clear, message_area);
 
         let paragraph = Paragraph::new(text.fg(Color::DarkGray).dim().bold());
-        f.render_widget(paragraph, Rect::new(x, y + 1, area_w, 1));
+        f.render_widget(paragraph, Rect::new(x + h_padding, y + 1, area_w, 1));
         return;
     }
 
@@ -116,4 +117,42 @@ pub fn file_creator(f: &mut Frame, rect: Rect, app: &mut App) {
             inner_area.y,
         ));
     }
+}
+
+pub fn controls(f: &mut Frame, rect: Rect, app: &mut App) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Length(20), Constraint::Min(0)])
+        .split(rect);
+
+    if let Some(..) = app.error_message {
+        let err_text = format!("! ERROR");
+        let style = Style::default().fg(Color::Rgb(255, 45, 85));
+        let span = Span::styled(err_text, style);
+        let paragraph = Paragraph::new(span);
+        f.render_widget(paragraph, chunks[0]);
+    } else if app.is_loading {
+        let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let frame = spinner[app.spinner_index % spinner.len()];
+        let loading_text = format!(" {frame} FETCHING");
+        let style = Style::default().fg(Color::Rgb(0, 255, 150));
+        let span = Span::styled(loading_text, style);
+        let paragraph = Paragraph::new(span);
+        f.render_widget(paragraph, chunks[0]);
+    }
+
+    let keys_style = Style::default().fg(Color::Gray);
+    let desc_style = Style::default().fg(Color::DarkGray);
+
+    let current_keys = Line::from(vec![
+        Span::styled("esc ", keys_style),
+        Span::styled("QUIT   ", desc_style),
+        Span::styled("jk ", keys_style),
+        Span::styled("MOVE   ", desc_style),
+        Span::styled("enter ", keys_style),
+        Span::styled("SELECT  ", desc_style),
+    ]);
+
+    let help = Paragraph::new(current_keys).alignment(Alignment::Center);
+    f.render_widget(help, rect);
 }

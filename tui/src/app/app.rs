@@ -195,6 +195,7 @@ impl App {
 
             workspace_render::file_creator(frame, floating_chunks[0], self);
             workspace_render::file_selector(frame, floating_chunks[1], self);
+            workspace_render::controls(frame, main_chunks[1], self);
         }
     }
 
