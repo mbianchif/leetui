@@ -1,6 +1,6 @@
 mod app;
 mod edit_render;
-mod editor;
+pub mod editor;
 pub mod handler;
 mod home_render;
 mod utils_render;

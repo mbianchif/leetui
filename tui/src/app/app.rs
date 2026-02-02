@@ -33,6 +33,7 @@ pub enum UpdateResult {
     Continue,
     SkipRendering,
     Exit,
+    OpenEditor,
 }
 
 pub enum HomeInputState {
@@ -185,7 +186,7 @@ impl App {
 
             frame.render_widget(Clear, main_chunks[1]);
 
-            let floating_pane = utils_render::centered_rect(70, 70, main_chunks[0]);
+            let floating_pane = utils_render::centered_rect(60, 60, main_chunks[0]);
             frame.render_widget(Clear, floating_pane);
 
             let floating_chunks = Layout::default()
@@ -194,7 +195,6 @@ impl App {
 
             workspace_render::file_creator(frame, floating_chunks[0], self);
             workspace_render::file_selector(frame, floating_chunks[1], self);
-            workspace_render::controls(frame, main_chunks[1], self);
         }
     }
 
@@ -269,7 +269,7 @@ impl App {
         match action {
             Action::Key(key_event) => match self.workspace_state {
                 WorkspaceState::FileSelector => {
-                    self.handle_workspace_file_selector_key(key_event);
+                    return self.handle_workspace_file_selector_key(key_event);
                 }
                 WorkspaceState::NewFileMenu => {
                     self.handle_workspace_new_file_key(key_event);
@@ -391,7 +391,7 @@ impl App {
         UpdateResult::Continue
     }
 
-    fn handle_workspace_file_selector_key(&mut self, key: KeyEvent) {
+    fn handle_workspace_file_selector_key(&mut self, key: KeyEvent) -> UpdateResult {
         match key.code {
             KeyCode::Char('j') => self.file_list_state.scroll_down_by(1),
             KeyCode::Char('k') => self.file_list_state.scroll_up_by(1),
@@ -407,9 +407,13 @@ impl App {
                 self.new_file_input.clear();
                 self.workspace_state = WorkspaceState::NewFileMenu;
             }
-            KeyCode::Enter => {}
+            KeyCode::Enter => {
+                self.state = AppState::Editor;
+            }
             _ => {}
         }
+
+        UpdateResult::Continue
     }
 
     fn handle_workspace_new_file_key(&mut self, key: KeyEvent) {

@@ -3,12 +3,12 @@ mod app;
 use std::{env, error::Error, time::Duration};
 
 use api::LeetCodeClient;
-use ratatui::{Terminal, prelude::Backend};
+use ratatui::DefaultTerminal;
 use tokio::{sync::mpsc, time};
 
-use app::{App, handler};
+use app::{App, UpdateResult, handler};
 
-use crate::app::UpdateResult;
+use crate::app::editor;
 
 /// Retrieves the needed LeetCode variables to create the `LeetCodeClient` api.
 ///
@@ -27,7 +27,7 @@ fn retrieve_leetcode_vars() -> Result<(String, String), &'static str> {
 ///
 /// # Returns
 /// Any generic error the application has.
-async fn run_app<B: Backend + 'static>(terminal: &mut Terminal<B>) -> Result<(), Box<dyn Error>> {
+async fn run_app(terminal: &mut DefaultTerminal) -> Result<(), Box<dyn Error>> {
     let (client_tx, client_rx) = mpsc::channel(100);
     let (action_tx, mut action_rx) = mpsc::channel(100);
     let throbber_interval = time::interval(Duration::from_millis(30));
@@ -48,6 +48,11 @@ async fn run_app<B: Backend + 'static>(terminal: &mut Terminal<B>) -> Result<(),
             }
             UpdateResult::SkipRendering => {}
             UpdateResult::Exit => break,
+            UpdateResult::OpenEditor => {
+                ratatui::restore();
+                editor::open_editor(&app)?;
+                *terminal = ratatui::init();
+            }
         }
     }
 
