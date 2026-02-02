@@ -60,8 +60,6 @@ pub fn file_creator(f: &mut Frame, rect: Rect, app: &mut App) {
 
     let input_content = if !is_active {
         Span::from(" Type 'n' to create a new file...".fg(Color::Gray))
-    } else if app.new_file_input.is_empty() {
-        Span::from(" Enter new file name (with extension)".fg(Color::Gray))
     } else {
         Span::from(format!(" {}", app.new_file_input).fg(Color::Rgb(0, 255, 150)))
     };

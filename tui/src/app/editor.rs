@@ -14,6 +14,10 @@ pub fn create_file(app: &App) -> io::Result<()> {
         .join(slug);
 
     fs::create_dir_all(&dir_path)?;
+    let description_path = dir_path.join("README.md");
+    let md = html2md::parse_html(&question.content);
+    fs::write(description_path, md)?;
+
     let file_name = &app.new_file_input;
     let file_path = dir_path.join(file_name);
     let lang = app.detected_language.as_ref().unwrap();

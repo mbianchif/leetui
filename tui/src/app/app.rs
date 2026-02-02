@@ -189,11 +189,11 @@ impl App {
             frame.render_widget(Clear, floating_pane);
 
             let floating_chunks = Layout::default()
-                .constraints([Constraint::Min(0), Constraint::Length(3)])
+                .constraints([Constraint::Length(3), Constraint::Min(0)])
                 .split(floating_pane);
 
-            workspace_render::file_selector(frame, floating_chunks[0], self);
-            workspace_render::file_creator(frame, floating_chunks[1], self);
+            workspace_render::file_creator(frame, floating_chunks[0], self);
+            workspace_render::file_selector(frame, floating_chunks[1], self);
             workspace_render::controls(frame, main_chunks[1], self);
         }
     }
@@ -518,14 +518,12 @@ impl App {
                 let path = entry.path();
 
                 if path.is_file() {
-                    if let Some(ext) = path.extension() {
-                        if ext == ".md" {
-                            continue;
-                        }
-                    }
-
                     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                        files.push(name.to_string());
+                        let ext = name.rsplit('.').next().unwrap_or_default();
+
+                        if Language::from_ext(ext).is_some() {
+                            files.push(name.to_string());
+                        }
                     }
                 }
             }
