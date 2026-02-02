@@ -6,6 +6,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
 use crate::{
+    QuestionSubmissionList, SubmissionListResponse,
     error::{LeetCodeErr, Result},
     models::{
         DailyChallenge, DailyChallengeOuter, GlobalData, GqlResponse, MatchedUser,
@@ -159,6 +160,35 @@ impl LeetCodeClient {
         Ok(data.problemset_question_list)
     }
 
+    /// Retrieves the list of submissions for a question.
+    ///
+    /// # Arguments
+    /// * `slug` - The slug for the question.
+    /// * `offset` - The offset to start the list out of.
+    /// * `limit` - The maximum amount of questions to retrieve at once.
+    /// * `status` - The status of the submission.
+    ///
+    /// # Returns
+    /// The list of submissions.
+    pub async fn get_question_submition_list(
+        &self,
+        slug: &str,
+        offset: usize,
+        limit: usize,
+        status: &str,
+    ) -> Result<QuestionSubmissionList> {
+        let query = include_str!("../queries/get_submission_details.graphql");
+        let vars = json!({
+            "questionSlug": slug,
+            "offset": offset,
+            "limit": limit,
+            "status": status,
+        });
+
+        let data: SubmissionListResponse = self.request_graphql(query, vars).await?;
+        Ok(data.submissions)
+    }
+
     /// Runs the testing code for a certain problem.
     ///
     /// # Arguments
@@ -246,17 +276,17 @@ impl LeetCodeClient {
     ///
     /// # Arguments
     /// * `query` - The GraphQL query.
-    /// * `variables` - The variables to replace in the query.
+    /// * `vars` - The variables to replace in the query.
     ///
     /// # Returns
     /// A result with the response's data.
-    async fn request_graphql<V, T>(&self, query: &str, variables: V) -> Result<T>
+    async fn request_graphql<V, T>(&self, query: &str, vars: V) -> Result<T>
     where
         V: Serialize,
         T: DeserializeOwned,
     {
         let url = format!("{BASE_URL}/graphql");
-        self.request(&url, query, variables).await
+        self.request(&url, query, vars).await
     }
 
     /// Makes a GraphQL request to the leetcode api.

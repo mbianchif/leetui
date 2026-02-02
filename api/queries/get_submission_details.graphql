@@ -1,0 +1,20 @@
+query questionSubmissionList(
+  $questionSlug: String!,
+  $offset: Int!,
+  $limit: Int!,
+  $status: Int)
+{
+  questionSubmissionList(
+    questionSlug: $questionSlug,
+    offset: $offset,
+    limit: $limit,
+    status: $status
+  ) {
+    submissions {
+      id
+      lang
+      statusDisplay
+      code
+    }
+  }
+}

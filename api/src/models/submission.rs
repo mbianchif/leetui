@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::Language;
+
 #[derive(Debug, Deserialize)]
 pub struct SubmissionResponse {
     pub submission_id: u32,
@@ -77,6 +79,7 @@ pub enum SubmissionState {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
 pub enum StatusMsg {
     #[serde(rename = "Accepted")]
     Accepted,
@@ -94,4 +97,25 @@ pub enum StatusMsg {
     InternalError,
     #[serde(other)]
     Unknown,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmissionListResponse {
+    pub submissions: QuestionSubmissionList,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuestionSubmissionList {
+    submissions: Vec<Submission>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Submission {
+    id: String,
+    lang: Language,
+    status_display: String,
+    code: String,
 }
