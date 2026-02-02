@@ -42,7 +42,7 @@ pub enum HomeInputState {
 enum AppState {
     Home,
     LanguageSelection,
-    Editing,
+    Editor,
 }
 
 pub struct App<M: Multiplexer> {
@@ -120,7 +120,7 @@ impl<M: Multiplexer> App<M> {
         match self.state {
             AppState::Home => self.render_home(frame),
             AppState::LanguageSelection => self.render_language_selection(frame),
-            AppState::Editing => todo!(),
+            AppState::Editor => todo!(),
         }
     }
 
@@ -190,7 +190,7 @@ impl<M: Multiplexer> App<M> {
         match self.state {
             AppState::Home => self.update_home(action),
             AppState::LanguageSelection => self.update_language_selection(action),
-            AppState::Editing => todo!(),
+            AppState::Editor => self.update_editor(action),
         }
     }
 
@@ -259,6 +259,18 @@ impl<M: Multiplexer> App<M> {
         true
     }
 
+    fn update_editor(&mut self, action: Action) -> bool {
+        match action {
+            Action::Key(key_event) => todo!(),
+            Action::Tick if self.is_loading => {
+                self.spinner_index = self.spinner_index.wrapping_add(1);
+            }
+            _ => {}
+        };
+
+        true
+    }
+
     /// Handles an incoming key event for the normal mode.
     ///
     /// # Arguments
@@ -279,6 +291,17 @@ impl<M: Multiplexer> App<M> {
                     .table_state
                     .selected()
                     .map(|i| self.problems[i].title_slug.clone());
+
+                if let Some(slug) = slug {
+                    self.is_loading = true;
+                    self.send_request(ClientRequest::FetchQuestion { slug });
+                }
+            }
+            (KeyCode::Char('d'), KeyModifiers::NONE) => {
+                let slug = self
+                    .daily_challenge
+                    .as_ref()
+                    .map(|dc| dc.title_slug.clone());
 
                 if let Some(slug) = slug {
                     self.is_loading = true;
@@ -349,7 +372,7 @@ impl<M: Multiplexer> App<M> {
                     }
                 };
 
-                self.state = AppState::Editing;
+                self.state = AppState::Editor;
                 if let Err(e) = self.multiplexer.open(&path) {
                     self.error_message = Some(e.to_string());
                 }

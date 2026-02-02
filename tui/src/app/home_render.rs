@@ -258,6 +258,5 @@ pub fn controls<M: Multiplexer>(f: &mut Frame, rect: Rect, app: &mut App<M>) {
     };
 
     let help = Paragraph::new(current_keys).alignment(Alignment::Center);
-
     f.render_widget(help, rect);
 }
