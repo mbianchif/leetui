@@ -8,6 +8,8 @@ use tokio::{sync::mpsc, time};
 
 use app::{App, Zellij, handler};
 
+use crate::app::UpdateResult;
+
 /// Retrieves the needed LeetCode variables to create the `LeetCodeClient` api.
 ///
 /// # Returns
@@ -39,12 +41,13 @@ async fn run_app<B: Backend + 'static>(terminal: &mut Terminal<B>) -> Result<(),
     tokio::spawn(handler::spawn_ticker(action_tx.clone(), throbber_interval));
     tokio::spawn(handler::spawn_client(action_tx, client_rx, client));
 
-    loop {
-        terminal.draw(|f| app.render(f))?;
-        if let Some(action) = action_rx.recv().await {
-            if !app.update(action) {
-                break;
+    while let Some(action) = action_rx.recv().await {
+        match app.update(action) {
+            UpdateResult::Continue => {
+                terminal.draw(|f| app.render(f))?;
             }
+            UpdateResult::SkipRendering => {}
+            UpdateResult::Exit => break,
         }
     }
 

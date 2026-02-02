@@ -34,6 +34,12 @@ pub enum Action {
     NetworkError(String),
 }
 
+pub enum UpdateResult {
+    Continue,
+    SkipRendering,
+    Exit,
+}
+
 pub enum HomeInputState {
     Normal,
     Searching,
@@ -186,7 +192,7 @@ impl<M: Multiplexer> App<M> {
         }
     }
 
-    pub fn update(&mut self, action: Action) -> bool {
+    pub fn update(&mut self, action: Action) -> UpdateResult {
         match self.state {
             AppState::Home => self.update_home(action),
             AppState::LanguageSelection => self.update_language_selection(action),
@@ -194,11 +200,11 @@ impl<M: Multiplexer> App<M> {
         }
     }
 
-    fn update_home(&mut self, action: Action) -> bool {
+    fn update_home(&mut self, action: Action) -> UpdateResult {
         match action {
             Action::Key(key) => match self.input_mode {
                 HomeInputState::Normal => return self.handle_home_normal_key(key),
-                HomeInputState::Searching => self.handle_home_searching_key(key),
+                HomeInputState::Searching => return self.handle_home_searching_key(key),
             },
             Action::ProblemListLoaded(problems) => {
                 self.has_more = problems.len() >= 50;
@@ -221,7 +227,11 @@ impl<M: Multiplexer> App<M> {
                 self.state = AppState::LanguageSelection;
                 self.is_loading = false;
             }
-            Action::Tick if self.is_loading => {
+            Action::Tick => {
+                if !self.is_loading {
+                    return UpdateResult::SkipRendering;
+                }
+
                 self.spinner_index = self.spinner_index.wrapping_add(1);
             }
             Action::NetworkError(e) => {
@@ -241,34 +251,41 @@ impl<M: Multiplexer> App<M> {
                 self.daily_challenge = Some(problem);
                 self.is_loading = false;
             }
-            _ => {}
-        }
+        };
 
-        true
+        UpdateResult::Continue
     }
 
-    fn update_language_selection(&mut self, action: Action) -> bool {
+    fn update_language_selection(&mut self, action: Action) -> UpdateResult {
         match action {
             Action::Key(key_event) => self.handle_language_selection_key(key_event),
-            Action::Tick if self.is_loading => {
+            Action::Tick => {
+                if !self.is_loading {
+                    return UpdateResult::SkipRendering;
+                }
+
                 self.spinner_index = self.spinner_index.wrapping_add(1);
             }
             _ => {}
         };
 
-        true
+        UpdateResult::Continue
     }
 
-    fn update_editor(&mut self, action: Action) -> bool {
+    fn update_editor(&mut self, action: Action) -> UpdateResult {
         match action {
-            Action::Key(key_event) => todo!(),
-            Action::Tick if self.is_loading => {
+            Action::Key(_key_event) => todo!(),
+            Action::Tick => {
+                if !self.is_loading {
+                    return UpdateResult::SkipRendering;
+                }
+
                 self.spinner_index = self.spinner_index.wrapping_add(1);
             }
             _ => {}
         };
 
-        true
+        UpdateResult::Continue
     }
 
     /// Handles an incoming key event for the normal mode.
@@ -277,8 +294,8 @@ impl<M: Multiplexer> App<M> {
     /// * `key` - The incoming key event.
     ///
     /// # Returns
-    /// A boolean to tell the upstream caller if the app should keep running.
-    fn handle_home_normal_key(&mut self, key: KeyEvent) -> bool {
+    /// The result of an update.
+    fn handle_home_normal_key(&mut self, key: KeyEvent) -> UpdateResult {
         match (key.code, key.modifiers) {
             (KeyCode::Char('j'), _) => self.scroll_down_problem_list(1),
             (KeyCode::Char('k'), _) => self.scroll_up_problem_list(1),
@@ -317,18 +334,18 @@ impl<M: Multiplexer> App<M> {
                 let last = self.problems.len().saturating_sub(1);
                 self.table_state.select(Some(last));
             }
-            (KeyCode::Esc, _) => return false,
+            (KeyCode::Esc, _) => return UpdateResult::Exit,
             _ => {}
         };
 
-        true
+        UpdateResult::Continue
     }
 
     /// Handles an incoming key event for the searching mode.
     ///
     /// # Arguments
     /// * `key` - The incoming key event.
-    fn handle_home_searching_key(&mut self, key: KeyEvent) {
+    fn handle_home_searching_key(&mut self, key: KeyEvent) -> UpdateResult {
         match key.code {
             KeyCode::Char(ch) => {
                 self.input.push(ch);
@@ -354,6 +371,8 @@ impl<M: Multiplexer> App<M> {
             }
             _ => {}
         }
+
+        UpdateResult::Continue
     }
 
     fn handle_language_selection_key(&mut self, key: KeyEvent) {

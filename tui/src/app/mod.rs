@@ -5,5 +5,5 @@ mod home_render;
 mod multiplexer;
 
 pub(super) use app::HomeInputState;
-pub use app::{Action, App};
+pub use app::{Action, App, UpdateResult};
 pub(super) use multiplexer::{Multiplexer, Zellij};
