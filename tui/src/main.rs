@@ -13,7 +13,7 @@ use ratatui::{
 };
 use tokio::{sync::mpsc, time};
 
-use app::{App, handler, picker::PickerApp};
+use app::{App, Zellij, handler};
 
 /// Retrieves the needed LeetCode variables to create the `LeetCodeClient` api.
 ///
@@ -29,10 +29,10 @@ fn retrieve_leetcode_vars() -> Result<(String, String), &'static str> {
 async fn main() -> Result<(), Box<dyn Error>> {
     let (session, csrf) = retrieve_leetcode_vars()?;
 
-    let (client_tx, client_rx) = mpsc::channel(10);
-    let (action_tx, action_rx) = mpsc::channel(100);
+    let (client_tx, client_rx) = mpsc::channel(100);
+    let (action_tx, mut action_rx) = mpsc::channel(100);
     let throbber_interval = time::interval(Duration::from_millis(30));
-    let client = LeetCodeClient::new(session, csrf)?;
+    let client = LeetCodeClient::new(session.clone(), csrf.clone())?;
 
     // Initialize the input listeners.
     tokio::spawn(handler::spawn_keyboard(action_tx.clone()));
@@ -45,12 +45,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+    let mut app = App::new(client_tx, Zellij);
 
-    if env::args().find(|arg| arg == "--editor").is_some() {
-        // do nothing yet...
-    } else {
-        let mut app = PickerApp::new(client_tx).await;
-        app.event_loop(&mut terminal, action_rx).await?;
+    loop {
+        terminal.draw(|f| app.render(f))?;
+        if let Some(action) = action_rx.recv().await {
+            if !app.update(action) {
+                break;
+            }
+        }
     }
 
     // Cleanup.

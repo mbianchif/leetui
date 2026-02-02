@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 use serde::Deserialize;
 use serde_with::{json::JsonString, serde_as};
 
@@ -16,7 +18,7 @@ pub struct Question {
     pub content: String,
     pub difficulty: Difficulty,
     pub code_snippets: Vec<CodeSnippet>,
-    pub example_test_cases: String,
+    pub example_testcases: String,
     pub sample_test_case: String,
     #[serde_as(as = "JsonString")]
     pub meta_data: MetaData,
@@ -46,7 +48,7 @@ pub struct ReturnType {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeSnippet {
-    pub lang: String,
+    pub lang: Language,
     pub lang_slug: String,
     pub code: String,
 }
@@ -78,6 +80,7 @@ pub struct ProblemSummary {
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "PascalCase")]
 pub enum Difficulty {
     Easy,
     Medium,
@@ -99,19 +102,24 @@ pub struct TopicTag {
 }
 
 #[derive(Debug, Deserialize, PartialEq)]
+#[serde(rename_all = "PascalCase")]
 pub enum Language {
+    C,
+    #[serde(rename = "C++")]
     Cpp,
     Java,
     Python,
     Python3,
+    #[serde(rename = "C#")]
     Csharp,
     Javascript,
     Ruby,
     Swift,
-    Golang,
+    Go,
     Scala,
     Kotlin,
     Rust,
+    #[serde(rename = "PHP")]
     Php,
     Typescript,
     Racket,
@@ -120,4 +128,59 @@ pub enum Language {
     Dart,
     #[serde(other)]
     Unknown,
+}
+
+impl Language {
+    pub fn ext(&self) -> &'static str {
+        match self {
+            Language::C => "c",
+            Language::Cpp => "cpp",
+            Language::Java => "java",
+            Language::Python | Language::Python3 => "py",
+            Language::Csharp => "cs",
+            Language::Javascript => "js",
+            Language::Ruby => "rb",
+            Language::Swift => "swift",
+            Language::Go => "go",
+            Language::Scala => "scala",
+            Language::Kotlin => "kt",
+            Language::Rust => "rs",
+            Language::Php => "php",
+            Language::Typescript => "ts",
+            Language::Racket => "rkt",
+            Language::Erlang => "erl",
+            Language::Elixir => "ex",
+            Language::Dart => "dart",
+            Language::Unknown => "txt",
+        }
+    }
+}
+
+impl Display for Language {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Language::C => "C",
+            Language::Cpp => "C++",
+            Language::Java => "Java",
+            Language::Python => "Python2",
+            Language::Python3 => "Python3",
+            Language::Csharp => "C#",
+            Language::Javascript => "JavaScript",
+            Language::Ruby => "Ruby",
+            Language::Swift => "Swift",
+            Language::Go => "Go",
+            Language::Scala => "Scala",
+            Language::Kotlin => "Kotlin",
+            Language::Rust => "Rust",
+            Language::Php => "PHP",
+            Language::Typescript => "TypeScript",
+            Language::Racket => "Racket",
+            Language::Erlang => "Erlang",
+            Language::Elixir => "Elixir",
+            Language::Dart => "Dart",
+            Language::Unknown => "Unknown",
+        };
+
+        f.write_str(s)
+    }
 }

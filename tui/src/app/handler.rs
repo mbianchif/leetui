@@ -47,6 +47,9 @@ pub enum ClientRequest {
         search: Option<String>,
     },
     FetchDailyChallenge,
+    FetchQuestion {
+        slug: String,
+    },
 }
 
 /// Creates the client listener future.
@@ -89,6 +92,9 @@ pub async fn spawn_client(
                 .get_daily_challenge()
                 .await
                 .map(|p| Action::DailyChallengeLoaded(p.question)),
+            ClientRequest::FetchQuestion { slug } => {
+                client.get_problem(&slug).await.map(Action::QuestionLoaded)
+            }
         };
 
         match result {
