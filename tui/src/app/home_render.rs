@@ -182,6 +182,24 @@ pub fn problem_list<M: Multiplexer>(f: &mut Frame, rect: Rect, app: &mut App<M>)
         .style(row_style)
     });
 
+    let selected = app.table_state.selected().unwrap_or_default();
+    let total_items = app.problems.len();
+    let visible_rows = rect.height.saturating_sub(1) as usize;
+    let mut offset = app.table_state.offset();
+    let scrolloff = 2;
+
+    if selected >= offset + visible_rows - scrolloff {
+        offset = selected.saturating_sub(visible_rows - scrolloff - 1);
+    }
+
+    if selected < offset + scrolloff {
+        offset = selected.saturating_sub(scrolloff);
+    }
+
+    let max_offset = total_items.saturating_sub(visible_rows);
+    offset = offset.min(max_offset);
+    *app.table_state.offset_mut() = offset;
+
     let highligh_style = Style::default()
         .bg(Color::Rgb(60, 60, 60))
         .fg(Color::Rgb(0, 255, 150))

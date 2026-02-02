@@ -388,18 +388,15 @@ impl<M: Multiplexer> App<M> {
     /// # Arguments
     /// * `amount` - The amount of problems to move the cursor by.
     fn scroll_down_problem_list(&mut self, amount: usize) {
-        let i = self
-            .table_state
-            .selected()
-            .map(|i| (i + amount).min(self.problems.len().saturating_sub(1)))
-            .unwrap_or_default();
+        let last_index = self.problems.len().saturating_sub(1);
+        let current = self.table_state.selected().unwrap_or_default();
+        let next = (current + amount).min(last_index);
 
-        self.table_state.select(Some(i));
+        self.table_state.select(Some(next));
 
         let threshold = 25;
-        if i + threshold >= self.problems.len() && !self.is_loading && self.has_more {
+        if next + threshold >= self.problems.len() && !self.is_loading && self.has_more {
             self.is_loading = true;
-
             self.send_request(ClientRequest::FetchProblems {
                 skip: self.problems.len(),
                 limit: 50,
