@@ -1,9 +1,10 @@
 mod app;
 mod edit_render;
+mod editor;
 pub mod handler;
 mod home_render;
-mod multiplexer;
+mod utils_render;
+mod workspace_render;
 
 pub(super) use app::HomeInputState;
 pub use app::{Action, App, UpdateResult};
-pub(super) use multiplexer::{Multiplexer, Zellij};

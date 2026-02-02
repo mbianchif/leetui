@@ -6,7 +6,7 @@ use api::LeetCodeClient;
 use ratatui::{Terminal, prelude::Backend};
 use tokio::{sync::mpsc, time};
 
-use app::{App, Zellij, handler};
+use app::{App, handler};
 
 use crate::app::UpdateResult;
 
@@ -34,7 +34,7 @@ async fn run_app<B: Backend + 'static>(terminal: &mut Terminal<B>) -> Result<(),
 
     let (session, csrf) = retrieve_leetcode_vars()?;
     let client = LeetCodeClient::new(session.clone(), csrf.clone())?;
-    let mut app = App::new(client_tx, Zellij);
+    let mut app = App::new(client_tx);
 
     // Initialize the input listeners.
     tokio::spawn(handler::spawn_keyboard(action_tx.clone()));

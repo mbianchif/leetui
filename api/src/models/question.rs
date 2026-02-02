@@ -101,7 +101,7 @@ pub struct TopicTag {
     pub slug: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum Language {
     C,
@@ -112,7 +112,7 @@ pub enum Language {
     Python3,
     #[serde(rename = "C#")]
     Csharp,
-    Javascript,
+    JavaScript,
     Ruby,
     Swift,
     Go,
@@ -121,11 +121,12 @@ pub enum Language {
     Rust,
     #[serde(rename = "PHP")]
     Php,
-    Typescript,
+    TypeScript,
     Racket,
     Erlang,
     Elixir,
     Dart,
+    #[default]
     #[serde(other)]
     Unknown,
 }
@@ -138,7 +139,7 @@ impl Language {
             Language::Java => "java",
             Language::Python | Language::Python3 => "py",
             Language::Csharp => "cs",
-            Language::Javascript => "js",
+            Language::JavaScript => "js",
             Language::Ruby => "rb",
             Language::Swift => "swift",
             Language::Go => "go",
@@ -146,13 +147,40 @@ impl Language {
             Language::Kotlin => "kt",
             Language::Rust => "rs",
             Language::Php => "php",
-            Language::Typescript => "ts",
+            Language::TypeScript => "ts",
             Language::Racket => "rkt",
             Language::Erlang => "erl",
             Language::Elixir => "ex",
             Language::Dart => "dart",
             Language::Unknown => "txt",
         }
+    }
+
+    pub fn from_ext(ext: &str) -> Option<Self> {
+        let lang = match ext {
+            "c" => Language::C,
+            "cpp" => Language::Cpp,
+            "java" => Language::Java,
+            "py" => Language::Python3,
+            "cs" => Language::Csharp,
+            "js" => Language::JavaScript,
+            "rb" => Language::Ruby,
+            "swift" => Language::Swift,
+            "go" => Language::Go,
+            "scala" => Language::Scala,
+            "kt" => Language::Kotlin,
+            "rs" => Language::Rust,
+            "php" => Language::Php,
+            "ts" => Language::TypeScript,
+            "rkt" => Language::Racket,
+            "erl" => Language::Erlang,
+            "ex" => Language::Elixir,
+            "dart" => Language::Dart,
+            "txt" => Language::Unknown,
+            _ => return None,
+        };
+
+        Some(lang)
     }
 }
 
@@ -165,7 +193,7 @@ impl Display for Language {
             Language::Python => "Python2",
             Language::Python3 => "Python3",
             Language::Csharp => "C#",
-            Language::Javascript => "JavaScript",
+            Language::JavaScript => "JavaScript",
             Language::Ruby => "Ruby",
             Language::Swift => "Swift",
             Language::Go => "Go",
@@ -173,7 +201,7 @@ impl Display for Language {
             Language::Kotlin => "Kotlin",
             Language::Rust => "Rust",
             Language::Php => "PHP",
-            Language::Typescript => "TypeScript",
+            Language::TypeScript => "TypeScript",
             Language::Racket => "Racket",
             Language::Erlang => "Erlang",
             Language::Elixir => "Elixir",
