@@ -83,7 +83,7 @@ pub struct App {
     pub workspace_state: WorkspaceState,
     pub question: Option<Question>,
     pub new_file_input: String,
-    pub detected_language: Option<Language>,
+    pub infered_language: Option<Language>,
 }
 
 impl App {
@@ -115,7 +115,7 @@ impl App {
             local_files: Vec::new(),
             file_list_state: ListState::default().with_selected(Some(0)),
             new_file_input: String::new(),
-            detected_language: None,
+            infered_language: None,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
@@ -422,18 +422,19 @@ impl App {
             KeyCode::Char(ch) => {
                 self.new_file_input.push(ch);
                 let ext = self.new_file_input.rsplit('.').next().unwrap_or_default();
-                self.detected_language = Language::from_ext(ext);
+                self.infered_language = Language::from_ext(ext);
             }
             KeyCode::Backspace => {
                 self.new_file_input.pop();
                 let ext = self.new_file_input.rsplit('.').next().unwrap_or_default();
-                self.detected_language = Language::from_ext(ext);
+                self.infered_language = Language::from_ext(ext);
             }
-            KeyCode::Enter if self.detected_language.is_some() => {
+            KeyCode::Enter if self.infered_language.is_some() => {
                 if let Err(e) = editor::create_file(self) {
                     self.error_message = Some(e.to_string());
                 } else {
                     self.refresh_local_files();
+                    self.infered_language = None;
                     self.new_file_input.clear();
                     self.workspace_state = WorkspaceState::FileSelector;
                 }

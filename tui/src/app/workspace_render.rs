@@ -1,6 +1,5 @@
 use ratatui::{
     Frame,
-    buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Style, Stylize},
     text::{Line, Span},
@@ -100,7 +99,7 @@ pub fn file_creator(f: &mut Frame, rect: Rect, app: &mut App) {
 
     f.render_widget(Paragraph::new(input_content), inner_area);
 
-    let lang_infer = match app.detected_language {
+    let lang_infer = match app.infered_language {
         Some(ref lang) if is_active => {
             let name = format!("{} ", lang.to_string().to_lowercase());
             name.fg(Color::Rgb(0, 255, 150)).bold()

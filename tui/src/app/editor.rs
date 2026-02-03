@@ -20,7 +20,7 @@ pub fn create_file(app: &App) -> io::Result<()> {
 
     let file_name = &app.new_file_input;
     let file_path = dir_path.join(file_name);
-    let lang = app.detected_language.as_ref().unwrap();
+    let lang = app.infered_language.as_ref().unwrap();
 
     let snippet: &str = question
         .code_snippets
