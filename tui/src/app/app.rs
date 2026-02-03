@@ -122,7 +122,7 @@ impl App {
         app.send_request(ClientRequest::FetchDailyChallenge);
         app.send_request(ClientRequest::FetchProblems {
             skip: 0,
-            limit: 100,
+            limit: 50,
             search: None,
         });
         app
@@ -383,7 +383,8 @@ impl App {
                 self.send_request(ClientRequest::FetchProblems {
                     skip: 0,
                     limit: 50,
-                    search: Some(self.search_bar_input.clone()),
+                    search: (!self.search_bar_input.is_empty())
+                        .then_some(self.search_bar_input.clone()),
                 })
             }
             _ => {}
