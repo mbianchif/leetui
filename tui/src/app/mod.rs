@@ -1,5 +1,4 @@
 mod app;
-mod edit_render;
 pub mod editor;
 pub mod handler;
 mod home_render;
