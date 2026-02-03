@@ -7,6 +7,7 @@
 1. Open the code editor on the selected files.
 
 ## Upcoming
+1. Filter problems by status, sort by acceptance, basic search queries.
 1. Fetch previous submitions so as to not only bring boilerplate files.
 1. Run test cases.
 1. Submit code.
