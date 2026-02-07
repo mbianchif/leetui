@@ -233,7 +233,7 @@ pub fn problem_list(f: &mut Frame, rect: Rect, app: &mut App) {
 /// * `f` - The frame to render the widgets.
 /// * `rect` - A rectangle to insert widgets.
 /// * `app` - The main application.
-pub fn controls(f: &mut Frame, rect: Rect, app: &mut App) {
+pub fn home_controls(f: &mut Frame, rect: Rect, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Length(20), Constraint::Min(0)])
@@ -261,19 +261,19 @@ pub fn controls(f: &mut Frame, rect: Rect, app: &mut App) {
     let current_keys = match app.home_input_state {
         HomeInputState::Normal => Line::from(vec![
             Span::styled("esc ", keys_style),
-            Span::styled("QUIT   ", desc_style),
+            Span::styled("QUIT  ", desc_style),
+            Span::styled("jk ", keys_style),
+            Span::styled("MOVE  ", desc_style),
             Span::styled("d ", keys_style),
             Span::styled("DAILY  ", desc_style),
-            Span::styled("jk ", keys_style),
-            Span::styled("MOVE   ", desc_style),
             Span::styled("enter ", keys_style),
             Span::styled("SELECT  ", desc_style),
         ]),
         HomeInputState::Searching => Line::from(vec![
             Span::styled("esc ", keys_style),
-            Span::styled("CANCEL   ", desc_style),
+            Span::styled("CANCEL  ", desc_style),
             Span::styled("enter ", keys_style),
-            Span::styled("CONFIRM   ", desc_style),
+            Span::styled("CONFIRM  ", desc_style),
         ]),
     };
 

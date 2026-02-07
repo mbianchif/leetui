@@ -18,6 +18,8 @@ pub async fn spawn_keyboard(tx: Sender<Action>) {
         if event::poll(Duration::from_millis(8)).unwrap_or_default() {
             if let Event::Key(key_event) = event::read().unwrap() {
                 let _ = tx.send(Action::Key(key_event)).await;
+            } else {
+                let _ = tx.send(Action::Other).await;
             }
         }
     }

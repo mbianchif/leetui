@@ -8,8 +8,6 @@ use tokio::{sync::mpsc, time};
 
 use app::{App, UpdateResult, handler};
 
-use crate::app::editor;
-
 /// Retrieves the needed LeetCode variables to create the `LeetCodeClient` api.
 ///
 /// # Returns
@@ -50,7 +48,7 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<(), Box<dyn Error>> {
             UpdateResult::Exit => break,
             UpdateResult::OpenEditor => {
                 ratatui::restore();
-                editor::open_editor(&app)?;
+                // open the editor.
                 *terminal = ratatui::init();
             }
         }

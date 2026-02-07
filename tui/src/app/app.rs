@@ -1,17 +1,16 @@
-use std::{collections::HashSet, fs};
+use std::collections::HashSet;
 
-use api::{Language, MatchedUser, ProblemSummary, Question, UserStatus};
+use api::{MatchedUser, ProblemSummary, Question, UserStatus};
 use ratatui::{
     Frame,
     crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers},
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
-    widgets::{Clear, ListState, Paragraph, TableState},
+    widgets::{Paragraph, TableState},
 };
 use tokio::sync::mpsc::Sender;
 
-use super::{handler::ClientRequest, home_render};
-use crate::app::{editor, utils_render, workspace_render};
+use super::{handler::ClientRequest, rendering, utils};
 
 /// The types of events that exist in both apps.
 #[derive(Debug)]
@@ -27,6 +26,7 @@ pub enum Action {
     QuestionLoaded(Question),
 
     NetworkError(String),
+    Other,
 }
 
 pub enum UpdateResult {
@@ -41,15 +41,22 @@ pub enum HomeInputState {
     Searching,
 }
 
-pub enum WorkspaceState {
-    NewFileMenu,
-    FileSelector,
+#[derive(Clone, Copy)]
+pub enum EditorState {
+    Description,
+    TestCases,
+    EditingTestCaseField,
 }
 
 enum AppState {
     Home,
-    Workspace,
     Editor,
+}
+
+pub struct TestCase {
+    pub input: Vec<String>,
+    pub output: Option<String>,
+    pub expected: Option<String>,
 }
 
 pub struct App {
@@ -77,13 +84,15 @@ pub struct App {
     pub known_ids: HashSet<String>,
     pub has_more: bool,
 
-    // Workspace State
-    pub local_files: Vec<String>,
-    pub file_list_state: ListState,
-    pub workspace_state: WorkspaceState,
+    // Editor panel
+    pub editor_state: EditorState,
     pub question: Option<Question>,
-    pub new_file_input: String,
-    pub infered_language: Option<Language>,
+    pub description_offset: usize,
+    pub test_cases: Vec<TestCase>,
+    pub selected_test_case: usize,
+    pub selected_case_text: usize,
+    pub test_cases_scroll_offset: usize,
+    pub last_test_case_viewport_height: u16,
 }
 
 impl App {
@@ -110,12 +119,14 @@ impl App {
             has_more: true,
             daily_challenge: None,
             state: AppState::Home,
-            workspace_state: WorkspaceState::FileSelector,
             question: None,
-            local_files: Vec::new(),
-            file_list_state: ListState::default().with_selected(Some(0)),
-            new_file_input: String::new(),
-            infered_language: None,
+            description_offset: 0,
+            test_cases: Vec::new(),
+            selected_test_case: 0,
+            selected_case_text: 0,
+            editor_state: EditorState::Description,
+            test_cases_scroll_offset: 0,
+            last_test_case_viewport_height: 0,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
@@ -131,10 +142,6 @@ impl App {
     pub fn render(&mut self, frame: &mut Frame) {
         match self.state {
             AppState::Home => self.render_home(frame),
-            AppState::Workspace => {
-                self.render_home(frame);
-                self.render_workspace(frame);
-            }
             AppState::Editor => self.render_editor(frame),
         }
     }
@@ -165,11 +172,11 @@ impl App {
             ])
             .split(outer_layout[1]);
 
-        home_render::user_profile(frame, main_chunks[1], self);
-        home_render::search_bar(frame, main_chunks[3], self);
-        home_render::daily_challenge(frame, main_chunks[5], self);
-        home_render::problem_list(frame, main_chunks[7], self);
-        home_render::controls(frame, main_chunks[9], self);
+        rendering::user_profile(frame, main_chunks[1], self);
+        rendering::search_bar(frame, main_chunks[3], self);
+        rendering::daily_challenge(frame, main_chunks[5], self);
+        rendering::problem_list(frame, main_chunks[7], self);
+        rendering::home_controls(frame, main_chunks[9], self);
 
         if let Some(ref err) = self.error_message {
             let err_line = Paragraph::new(format!(" ERROR: {}", err))
@@ -178,33 +185,44 @@ impl App {
         }
     }
 
-    fn render_workspace(&mut self, frame: &mut Frame) {
-        if self.question.is_some() {
-            let main_chunks = Layout::default()
-                .constraints([Constraint::Min(0), Constraint::Length(1)])
-                .split(frame.area());
+    pub fn render_editor(&mut self, frame: &mut Frame) {
+        let outer_layout = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(4),
+                Constraint::Min(0),
+                Constraint::Length(4),
+            ])
+            .split(frame.area());
 
-            frame.render_widget(Clear, main_chunks[1]);
+        let constraints = match self.editor_state {
+            EditorState::Description => [
+                Constraint::Min(0),    // description
+                Constraint::Length(3), // test cases
+                Constraint::Length(1), // padding
+                Constraint::Length(1), // controls
+            ],
+            _ => [
+                Constraint::Min(0),         // description
+                Constraint::Percentage(30), // test cases
+                Constraint::Length(1),      // padding
+                Constraint::Length(1),      // controls
+            ],
+        };
 
-            let floating_pane = utils_render::centered_rect(60, 60, main_chunks[0]);
-            frame.render_widget(Clear, floating_pane);
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(outer_layout[1]);
 
-            let floating_chunks = Layout::default()
-                .constraints([Constraint::Length(3), Constraint::Min(0)])
-                .split(floating_pane);
-
-            workspace_render::file_creator(frame, floating_chunks[0], self);
-            workspace_render::file_selector(frame, floating_chunks[1], self);
-            workspace_render::controls(frame, main_chunks[1], self);
-        }
+        rendering::description(frame, main_chunks[0], self);
+        rendering::test_cases(frame, main_chunks[1], self);
+        rendering::editor_controls(frame, main_chunks[3], self);
     }
-
-    pub fn render_editor(&mut self, frame: &mut Frame) {}
 
     pub fn update(&mut self, action: Action) -> UpdateResult {
         match self.state {
             AppState::Home => self.update_home(action),
-            AppState::Workspace => self.update_workspace(action),
             AppState::Editor => self.update_editor(action),
         }
     }
@@ -231,11 +249,25 @@ impl App {
 
                 self.is_loading = false;
             }
-            Action::QuestionLoaded(question) => {
+            Action::QuestionLoaded(mut question) => {
+                question.content = utils::html_to_markdown(&question.content);
+
+                let param_count = question.meta_data.params.len();
+                let lines: Vec<_> = question.example_testcases.lines().collect();
+
+                self.test_cases = lines
+                    .chunks(param_count)
+                    .map(|chunk| TestCase {
+                        input: chunk.iter().map(|s| s.to_string()).collect(),
+                        output: None,
+                        expected: None,
+                    })
+                    .collect();
+
                 self.is_loading = false;
                 self.question = Some(question);
-                self.state = AppState::Workspace;
-                self.refresh_local_files();
+                self.state = AppState::Editor;
+                self.selected_test_case = 0;
             }
             Action::Tick => {
                 if !self.is_loading {
@@ -261,28 +293,6 @@ impl App {
                 self.daily_challenge = Some(problem);
                 self.is_loading = false;
             }
-        };
-
-        UpdateResult::Continue
-    }
-
-    fn update_workspace(&mut self, action: Action) -> UpdateResult {
-        match action {
-            Action::Key(key_event) => match self.workspace_state {
-                WorkspaceState::FileSelector => {
-                    return self.handle_workspace_file_selector_key(key_event);
-                }
-                WorkspaceState::NewFileMenu => {
-                    self.handle_workspace_new_file_key(key_event);
-                }
-            },
-            Action::Tick => {
-                if !self.is_loading {
-                    return UpdateResult::SkipRendering;
-                }
-
-                self.spinner_index = self.spinner_index.wrapping_add(1);
-            }
             _ => {}
         };
 
@@ -291,7 +301,13 @@ impl App {
 
     fn update_editor(&mut self, action: Action) -> UpdateResult {
         match action {
-            Action::Key(key_event) => self.handle_editor_key(key_event),
+            Action::Key(key_event) => match self.editor_state {
+                EditorState::Description => self.handle_editor_description_key(key_event),
+                EditorState::TestCases => self.handle_editor_test_cases_key(key_event),
+                EditorState::EditingTestCaseField => {
+                    self.handle_editor_editing_test_case_key(key_event)
+                }
+            },
             Action::Tick => {
                 if !self.is_loading {
                     return UpdateResult::SkipRendering;
@@ -314,9 +330,9 @@ impl App {
     /// The result of an update.
     fn handle_home_normal_key(&mut self, key: KeyEvent) -> UpdateResult {
         match (key.code, key.modifiers) {
-            (KeyCode::Char('j'), _) => self.scroll_down_problem_list(1),
-            (KeyCode::Char('k'), _) => self.scroll_up_problem_list(1),
-            (KeyCode::Char('/'), _) => {
+            (KeyCode::Char('j'), KeyModifiers::NONE) => self.scroll_down_problem_list(1),
+            (KeyCode::Char('k'), KeyModifiers::NONE) => self.scroll_up_problem_list(1),
+            (KeyCode::Char('/'), KeyModifiers::NONE) => {
                 self.search_bar_input.clear();
                 self.home_input_state = HomeInputState::Searching;
             }
@@ -344,13 +360,6 @@ impl App {
             }
             (KeyCode::Char('d'), KeyModifiers::CONTROL) => self.scroll_down_problem_list(20),
             (KeyCode::Char('u'), KeyModifiers::CONTROL) => self.scroll_up_problem_list(20),
-            (KeyCode::Char('g'), _) => {
-                self.problem_table_state.select(Some(0));
-            }
-            (KeyCode::Char('G'), _) => {
-                let last = self.problems.len().saturating_sub(1);
-                self.problem_table_state.select(Some(last));
-            }
             (KeyCode::Esc, _) => return UpdateResult::Exit,
             _ => {}
         };
@@ -393,67 +402,96 @@ impl App {
         UpdateResult::Continue
     }
 
-    fn handle_workspace_file_selector_key(&mut self, key: KeyEvent) -> UpdateResult {
+    fn handle_editor_description_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('j') => self.file_list_state.scroll_down_by(1),
-            KeyCode::Char('k') => self.file_list_state.scroll_up_by(1),
-            KeyCode::Esc => match self.workspace_state {
-                WorkspaceState::FileSelector => {
-                    self.state = AppState::Home;
-                }
-                WorkspaceState::NewFileMenu => {
-                    self.workspace_state = WorkspaceState::FileSelector;
-                }
-            },
-            KeyCode::Char('n') => {
-                self.new_file_input.clear();
-                self.workspace_state = WorkspaceState::NewFileMenu;
+            KeyCode::Esc => {
+                self.state = AppState::Home;
             }
-            KeyCode::Enter => {
-                self.state = AppState::Editor;
+            KeyCode::Char('j') => {
+                self.description_offset = self.description_offset.saturating_add(1);
             }
+            KeyCode::Char('k') => {
+                self.description_offset = self.description_offset.saturating_sub(1);
+            }
+            KeyCode::Char('t') => {
+                self.editor_state = EditorState::TestCases;
+            }
+            KeyCode::Char('e') => {} // open editor
+            KeyCode::Char('s') => {} // submit code
+            KeyCode::Char('r') => {} // run tests
             _ => {}
         }
-
-        UpdateResult::Continue
     }
+    fn handle_editor_test_cases_key(&mut self, key: KeyEvent) {
+        let Some(ref question) = self.question else {
+            unreachable!()
+        };
 
-    fn handle_workspace_new_file_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char(ch) => {
-                self.new_file_input.push(ch);
-                let ext = self.new_file_input.rsplit('.').next().unwrap_or_default();
-                self.infered_language = Language::from_ext(ext);
-            }
-            KeyCode::Backspace => {
-                self.new_file_input.pop();
-                let ext = self.new_file_input.rsplit('.').next().unwrap_or_default();
-                self.infered_language = Language::from_ext(ext);
-            }
-            KeyCode::Enter if self.infered_language.is_some() => {
-                if let Err(e) = editor::create_file(self) {
-                    self.error_message = Some(e.to_string());
+            KeyCode::Char('h') => {
+                if self.selected_test_case == 0 {
+                    self.selected_test_case = self.test_cases.len() - 1;
                 } else {
-                    self.refresh_local_files();
-                    self.infered_language = None;
-                    self.new_file_input.clear();
-                    self.workspace_state = WorkspaceState::FileSelector;
+                    self.selected_test_case -= 1;
                 }
             }
+            KeyCode::Char('j') => {
+                if self.selected_case_text < question.meta_data.params.len() - 1 {
+                    self.selected_case_text += 1;
+                    self.adjust_scroll_for_selection();
+                }
+            }
+            KeyCode::Char('k') => {
+                if self.selected_case_text > 0 {
+                    self.selected_case_text -= 1;
+                    self.adjust_scroll_for_selection();
+                }
+            }
+            KeyCode::Char('l') => {
+                self.selected_test_case = (self.selected_test_case + 1) % self.test_cases.len();
+            }
             KeyCode::Enter => {
-                self.error_message = Some("failed to infer the language".to_string());
+                if !self.test_cases.is_empty() {
+                    self.editor_state = EditorState::EditingTestCaseField;
+                }
             }
-            KeyCode::Esc => {
-                self.workspace_state = WorkspaceState::FileSelector;
+            KeyCode::Char('d') => {
+                self.test_cases.remove(self.selected_test_case);
+                self.selected_test_case = self
+                    .selected_test_case
+                    .min(self.test_cases.len().saturating_sub(1));
             }
+            KeyCode::Char('a') => {
+                self.test_cases.push(TestCase {
+                    input: vec!["".into(); question.meta_data.params.len()],
+                    output: None,
+                    expected: None,
+                });
+            }
+            KeyCode::Esc | KeyCode::Char('t') => self.editor_state = EditorState::Description,
             _ => {}
         }
     }
 
-    fn handle_editor_key(&mut self, key: KeyEvent) {
+    fn handle_editor_editing_test_case_key(&mut self, key: KeyEvent) {
+        let Some(case) = self.test_cases.get_mut(self.selected_test_case) else {
+            unreachable!();
+        };
+
+        let text = &mut case.input[self.selected_case_text];
+
         match key.code {
+            KeyCode::Char(c) => text.push(c),
+            KeyCode::Backspace => {
+                text.pop();
+            }
+            KeyCode::Enter => {
+                *text = text.trim().to_string();
+                self.editor_state = EditorState::Description;
+            }
             KeyCode::Esc => {
-                self.state = AppState::Workspace;
+                *text = text.trim().to_string();
+                self.editor_state = EditorState::TestCases;
             }
             _ => {}
         }
@@ -498,6 +536,30 @@ impl App {
         self.problem_table_state.select(Some(i));
     }
 
+    pub fn adjust_scroll_for_selection(&mut self) {
+        let item_height = 5;
+        let param_count = self
+            .question
+            .as_ref()
+            .map(|q| q.meta_data.params.len())
+            .unwrap_or_default();
+
+        let total_content_height = (param_count * 5 + 4 + 2) as u16;
+        let viewport_height = self.last_test_case_viewport_height;
+        let max_scroll = total_content_height.saturating_sub(viewport_height);
+        let selection_top = (self.selected_case_text * item_height) as u16;
+        let selection_bottom = selection_top + 2;
+        let mut new_offset = self.test_cases_scroll_offset as u16;
+
+        if selection_top < new_offset {
+            new_offset = selection_top;
+        } else if selection_bottom >= new_offset + viewport_height.saturating_sub(2) {
+            new_offset = (selection_bottom + 2).saturating_sub(viewport_height);
+        }
+
+        self.test_cases_scroll_offset = new_offset.min(max_scroll) as usize;
+    }
+
     /// Sends a client request to the client handler
     ///
     /// # Arguments
@@ -507,36 +569,5 @@ impl App {
         tokio::spawn(async move {
             let _ = tx.send(req).await;
         });
-    }
-
-    fn refresh_local_files(&mut self) {
-        let Some(ref q) = self.question else { return };
-
-        let dir_path = std::env::home_dir()
-            .unwrap_or_default()
-            .join(".leetui")
-            .join(&q.title_slug);
-
-        let _ = fs::create_dir_all(&dir_path);
-
-        let mut files = Vec::new();
-        if let Ok(entries) = fs::read_dir(dir_path) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-
-                if path.is_file() {
-                    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                        let ext = name.rsplit('.').next().unwrap_or_default();
-
-                        if Language::from_ext(ext).is_some() {
-                            files.push(name.to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        files.sort();
-        self.local_files = files;
     }
 }
