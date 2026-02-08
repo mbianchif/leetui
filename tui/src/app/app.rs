@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, env, fs, io, path::PathBuf};
 
-use api::{MatchedUser, ProblemSummary, Question, UserStatus};
+use api::{Language, MatchedUser, ProblemSummary, Question, UserStatus};
 use ratatui::{
     Frame,
     crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers},
@@ -43,6 +43,7 @@ pub enum HomeInputState {
 
 #[derive(Clone, Copy)]
 pub enum EditorState {
+    SelectingLanguage,
     Description,
     TestCases,
     EditingTestCaseField,
@@ -87,7 +88,16 @@ pub struct App {
     // Editor panel
     pub editor_state: EditorState,
     pub question: Option<Question>,
+
+    // language selector
+    pub selected_language: Option<Language>,
+    pub solution_paths: Vec<PathBuf>,
+    pub language_selection_index: usize,
+
+    // description
     pub description_offset: usize,
+
+    // test cases
     pub test_cases: Vec<TestCase>,
     pub selected_test_case: usize,
     pub selected_case_text: usize,
@@ -120,6 +130,8 @@ impl App {
             daily_challenge: None,
             state: AppState::Home,
             question: None,
+            selected_language: None,
+            solution_paths: Vec::new(),
             description_offset: 0,
             test_cases: Vec::new(),
             selected_test_case: 0,
@@ -127,6 +139,7 @@ impl App {
             editor_state: EditorState::Description,
             test_cases_scroll_offset: 0,
             last_test_case_viewport_height: 0,
+            language_selection_index: 0,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
@@ -195,16 +208,33 @@ impl App {
             ])
             .split(frame.area());
 
-        let constraints = match self.editor_state {
-            EditorState::Description => [
+        let constraints: &[_] = match self.editor_state {
+            EditorState::SelectingLanguage => {
+                let rows =
+                    (self.question.as_ref().unwrap().code_snippets.len() as f32 / 3.0).ceil();
+
+                &[
+                    Constraint::Length(1),               // padding
+                    Constraint::Length(rows as u16 + 3), // language selector
+                    Constraint::Min(0),                  // description
+                    Constraint::Length(3),               // test cases
+                    Constraint::Length(1),               // padding
+                    Constraint::Length(1),               // controls
+                ]
+            }
+            EditorState::Description => &[
+                Constraint::Length(1), // padding
+                Constraint::Length(3), // language selector
                 Constraint::Min(0),    // description
                 Constraint::Length(3), // test cases
                 Constraint::Length(1), // padding
                 Constraint::Length(1), // controls
             ],
-            _ => [
+            _ => &[
+                Constraint::Length(1),      // padding
+                Constraint::Length(3),      // language selector
                 Constraint::Min(0),         // description
-                Constraint::Percentage(30), // test cases
+                Constraint::Percentage(40), // test cases
                 Constraint::Length(1),      // padding
                 Constraint::Length(1),      // controls
             ],
@@ -215,9 +245,10 @@ impl App {
             .constraints(constraints)
             .split(outer_layout[1]);
 
-        rendering::description(frame, main_chunks[0], self);
-        rendering::test_cases(frame, main_chunks[1], self);
-        rendering::editor_controls(frame, main_chunks[3], self);
+        rendering::language_selector(frame, main_chunks[1], self);
+        rendering::description(frame, main_chunks[2], self);
+        rendering::test_cases(frame, main_chunks[3], self);
+        rendering::editor_controls(frame, main_chunks[5], self);
     }
 
     pub fn update(&mut self, action: Action) -> UpdateResult {
@@ -250,6 +281,11 @@ impl App {
                 self.is_loading = false;
             }
             Action::QuestionLoaded(mut question) => {
+                if let Err(e) = self.load_local_file_paths(&question) {
+                    self.error_message = Some(e.to_string());
+                    return UpdateResult::Continue;
+                }
+
                 question.content = utils::html_to_markdown(&question.content);
 
                 let param_count = question.meta_data.params.len();
@@ -265,9 +301,9 @@ impl App {
                     .collect();
 
                 self.is_loading = false;
+                self.selected_test_case = 0;
                 self.question = Some(question);
                 self.state = AppState::Editor;
-                self.selected_test_case = 0;
             }
             Action::Tick => {
                 if !self.is_loading {
@@ -302,6 +338,9 @@ impl App {
     fn update_editor(&mut self, action: Action) -> UpdateResult {
         match action {
             Action::Key(key_event) => match self.editor_state {
+                EditorState::SelectingLanguage => {
+                    self.handle_editor_selecting_language_key(key_event)
+                }
                 EditorState::Description => self.handle_editor_description_key(key_event),
                 EditorState::TestCases => self.handle_editor_test_cases_key(key_event),
                 EditorState::EditingTestCaseField => {
@@ -402,6 +441,45 @@ impl App {
         UpdateResult::Continue
     }
 
+    fn handle_editor_selecting_language_key(&mut self, key: KeyEvent) {
+        let question = self.question.as_ref().unwrap();
+        let snippets = &question.code_snippets;
+        let nlangs = snippets.len();
+        let rows = (nlangs as f32 / 3.0).ceil() as usize;
+
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('c') => {
+                self.editor_state = EditorState::Description;
+            }
+            KeyCode::Char('h') => {
+                if self.language_selection_index >= rows {
+                    self.language_selection_index -= rows;
+                }
+            }
+            KeyCode::Char('j') => {
+                if self.language_selection_index % rows < rows - 1 {
+                    self.language_selection_index =
+                        (self.language_selection_index + 1).min(nlangs - 1);
+                }
+            }
+            KeyCode::Char('k') => {
+                if self.language_selection_index % rows > 0 {
+                    self.language_selection_index = self.language_selection_index.saturating_sub(1);
+                }
+            }
+            KeyCode::Char('l') => {
+                if self.language_selection_index + rows < nlangs {
+                    self.language_selection_index += rows;
+                }
+            }
+            KeyCode::Enter => {
+                let lang = snippets[self.language_selection_index].lang;
+                self.selected_language = Some(lang);
+            }
+            _ => {}
+        }
+    }
+
     fn handle_editor_description_key(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
@@ -415,6 +493,9 @@ impl App {
             }
             KeyCode::Char('t') => {
                 self.editor_state = EditorState::TestCases;
+            }
+            KeyCode::Char('c') => {
+                self.editor_state = EditorState::SelectingLanguage;
             }
             KeyCode::Char('e') => {} // open editor
             KeyCode::Char('s') => {} // submit code
@@ -569,5 +650,22 @@ impl App {
         tokio::spawn(async move {
             let _ = tx.send(req).await;
         });
+    }
+
+    fn load_local_file_paths(&mut self, question: &Question) -> io::Result<()> {
+        let slug = &question.title_slug;
+        let dir_path = env::home_dir()
+            .unwrap_or_default()
+            .join(".leetui")
+            .join(slug);
+
+        fs::create_dir_all(&dir_path)?;
+
+        self.solution_paths = fs::read_dir(&dir_path)?
+            .flatten()
+            .map(|file| file.path())
+            .collect();
+
+        Ok(())
     }
 }

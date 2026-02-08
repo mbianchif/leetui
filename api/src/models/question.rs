@@ -101,7 +101,7 @@ pub struct TopicTag {
     pub slug: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Deserialize, Default, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "PascalCase")]
 pub enum Language {
     C,

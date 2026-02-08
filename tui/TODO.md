@@ -3,7 +3,6 @@
 ## Priorities
 1. Take care of the code, deduplicate code everywhere (mainly renders).
 1. Put some comments explaining every method (if required).
-1. See and edit test cases.
 1. Open the code editor on the selected files.
 
 ## Upcoming
