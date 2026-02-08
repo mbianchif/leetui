@@ -17,6 +17,22 @@ pub fn description(f: &mut Frame, rect: Rect, app: &mut App) {
         .title_alignment(HorizontalAlignment::Center);
 
     let md = utils::markdown_to_text(&question.content);
+    let inner_width = rect.width.saturating_sub(2);
+    let inner_height = rect.height.saturating_sub(2);
+
+    let mut total_visual_rows = 0;
+    for line in &md.lines {
+        let w = line.width() as u16;
+        if w == 0 {
+            total_visual_rows += 1;
+        } else {
+            total_visual_rows += (w + inner_width - 1) / inner_width;
+        }
+    }
+
+    let max_scroll = total_visual_rows.saturating_sub(inner_height);
+    app.description_offset = app.description_offset.min(max_scroll as usize);
+
     let paragraph = Paragraph::new(md)
         .block(block)
         .wrap(Wrap { trim: true })
@@ -57,17 +73,18 @@ fn language_selector(f: &mut Frame, rect: Rect, app: &mut App) {
         Color::DarkGray
     };
 
-    let style = Style::new().fg(color).bold();
+    let border_style = Style::new().fg(color);
     let block = Block::bordered()
         .title(" SELECTED LANGUAGE ")
-        .border_style(style);
+        .border_style(border_style);
 
     let inner = block.inner(rect);
     f.render_widget(block, rect);
 
+    let text_style = Style::new().fg(color).bold();
     let text = match app.selected_language {
-        Some(ref lang) => format!(" {lang}").set_style(style),
-        None => " none".set_style(style),
+        Some(ref lang) => format!(" {lang}").set_style(text_style),
+        None => " none".set_style(text_style),
     };
 
     f.render_widget(text, inner);
@@ -126,20 +143,15 @@ fn test_case_tabs(frame: &mut Frame, area: Rect, app: &App) {
     let unselected_style = Style::default().fg(Color::DarkGray);
     let selected_style = Style::default().bg(Color::Reset).fg(selected_color).bold();
 
-    let titles: Vec<Line> = app
-        .test_cases
-        .iter()
-        .enumerate()
-        .map(|(i, _)| {
-            let style = if i == app.selected_test_case {
-                selected_style
-            } else {
-                unselected_style
-            };
+    let titles = app.test_cases.iter().enumerate().map(|(i, _)| {
+        let style = if i == app.selected_test_case {
+            selected_style
+        } else {
+            unselected_style
+        };
 
-            Line::from(format!(" Case {} ", i + 1)).style(style)
-        })
-        .collect();
+        Line::from(format!(" Case {} ", i + 1)).style(style)
+    });
 
     let border_color = match app.editor_state {
         EditorState::Description | EditorState::SelectingLanguage => Color::DarkGray,
