@@ -190,7 +190,7 @@ impl Display for Language {
             Language::C => "C",
             Language::Cpp => "C++",
             Language::Java => "Java",
-            Language::Python => "Python2",
+            Language::Python => "Python",
             Language::Python3 => "Python3",
             Language::Csharp => "C#",
             Language::JavaScript => "JavaScript",

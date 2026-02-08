@@ -26,7 +26,8 @@ pub fn description(f: &mut Frame, rect: Rect, app: &mut App) {
         if w == 0 {
             total_visual_rows += 1;
         } else {
-            total_visual_rows += (w + inner_width - 1) / inner_width;
+            total_visual_rows +=
+                (w + inner_width - 1) / (if inner_width == 0 { 1 } else { inner_width });
         }
     }
 

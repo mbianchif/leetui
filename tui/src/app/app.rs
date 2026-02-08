@@ -230,7 +230,7 @@ impl App {
             ],
             _ => {
                 let inputs = self.question.as_ref().unwrap().meta_data.params.len();
-                let exact_size = 3 + 1 + 5 * (inputs);
+                let exact_size = 2 + 5 * (inputs);
 
                 &[
                     Constraint::Length(1),              // padding
@@ -377,11 +377,13 @@ impl App {
                 self.home_input_state = HomeInputState::Searching;
             }
             (KeyCode::Enter, _) => {
-                let problem = self
+                let Some(problem) = self
                     .problem_table_state
                     .selected()
                     .map(|i| &self.problems[i])
-                    .unwrap();
+                else {
+                    return UpdateResult::Continue;
+                };
 
                 let user_is_premium = self.user_status.as_ref().unwrap().is_premium;
                 if !(problem.paid_only && !user_is_premium) {
@@ -630,17 +632,18 @@ impl App {
     }
 
     pub fn adjust_scroll_for_selection(&mut self) {
-        let item_height = 5;
         let param_count = self
             .question
             .as_ref()
             .map(|q| q.meta_data.params.len())
             .unwrap_or_default();
 
-        let total_content_height = (param_count * 5 + 4 + 2) as u16;
+        let total_content_height = (5 * param_count) as u16;
         let viewport_height = self.last_test_case_viewport_height;
+
         let max_scroll = total_content_height.saturating_sub(viewport_height);
-        let selection_top = (self.selected_case_text * item_height) as u16;
+        let selection_top = (5 * self.selected_case_text) as u16;
+
         let selection_bottom = selection_top + 2;
         let mut new_offset = self.test_cases_scroll_offset as u16;
 
