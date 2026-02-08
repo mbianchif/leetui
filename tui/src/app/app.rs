@@ -215,29 +215,31 @@ impl App {
 
                 &[
                     Constraint::Length(1),               // padding
-                    Constraint::Length(rows as u16 + 3), // language selector
                     Constraint::Min(0),                  // description
-                    Constraint::Length(3),               // test cases
+                    Constraint::Length(3 + rows as u16), // test cases + language selector + language grid
                     Constraint::Length(1),               // padding
                     Constraint::Length(1),               // controls
                 ]
             }
             EditorState::Description => &[
                 Constraint::Length(1), // padding
-                Constraint::Length(3), // language selector
                 Constraint::Min(0),    // description
-                Constraint::Length(3), // test cases
+                Constraint::Length(3), // test cases + language selector
                 Constraint::Length(1), // padding
                 Constraint::Length(1), // controls
             ],
-            _ => &[
-                Constraint::Length(1),      // padding
-                Constraint::Length(3),      // language selector
-                Constraint::Min(0),         // description
-                Constraint::Percentage(40), // test cases
-                Constraint::Length(1),      // padding
-                Constraint::Length(1),      // controls
-            ],
+            _ => {
+                let inputs = self.question.as_ref().unwrap().meta_data.params.len();
+                let exact_size = 3 + 1 + 5 * (inputs);
+
+                &[
+                    Constraint::Length(1),              // padding
+                    Constraint::Min(0),                 // description
+                    Constraint::Max(exact_size as u16), // test cases + language selector
+                    Constraint::Length(1),              // padding
+                    Constraint::Length(1),              // controls
+                ]
+            }
         };
 
         let main_chunks = Layout::default()
@@ -245,10 +247,9 @@ impl App {
             .constraints(constraints)
             .split(outer_layout[1]);
 
-        rendering::language_selector(frame, main_chunks[1], self);
-        rendering::description(frame, main_chunks[2], self);
-        rendering::test_cases(frame, main_chunks[3], self);
-        rendering::editor_controls(frame, main_chunks[5], self);
+        rendering::description(frame, main_chunks[1], self);
+        rendering::test_cases_languages_pane(frame, main_chunks[2], self);
+        rendering::editor_controls(frame, main_chunks[4], self);
     }
 
     pub fn update(&mut self, action: Action) -> UpdateResult {
@@ -376,12 +377,15 @@ impl App {
                 self.home_input_state = HomeInputState::Searching;
             }
             (KeyCode::Enter, _) => {
-                let slug = self
+                let problem = self
                     .problem_table_state
                     .selected()
-                    .map(|i| self.problems[i].title_slug.clone());
+                    .map(|i| &self.problems[i])
+                    .unwrap();
 
-                if let Some(slug) = slug {
+                let user_is_premium = self.user_status.as_ref().unwrap().is_premium;
+                if !(problem.paid_only && !user_is_premium) {
+                    let slug = problem.title_slug.to_string();
                     self.is_loading = true;
                     self.send_request(ClientRequest::FetchQuestion { slug });
                 }
@@ -476,6 +480,9 @@ impl App {
                 let lang = snippets[self.language_selection_index].lang;
                 self.selected_language = Some(lang);
             }
+            KeyCode::Char('t') => {
+                self.editor_state = EditorState::TestCases;
+            }
             _ => {}
         }
     }
@@ -549,7 +556,12 @@ impl App {
                     expected: None,
                 });
             }
+            KeyCode::Char('c') => {
+                self.editor_state = EditorState::SelectingLanguage;
+            }
             KeyCode::Esc | KeyCode::Char('t') => self.editor_state = EditorState::Description,
+            KeyCode::Char('s') => {} // submit code
+            KeyCode::Char('r') => {} // run tests
             _ => {}
         }
     }

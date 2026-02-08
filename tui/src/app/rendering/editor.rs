@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-
-use api::{Language, Question};
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, HorizontalAlignment, Layout, Rect},
@@ -12,31 +9,71 @@ use ratatui::{
 use super::utils;
 use crate::app::{App, app::EditorState};
 
-pub fn language_selector(f: &mut Frame, rect: Rect, app: &mut App) {
-    let constraints: &[_] = match app.editor_state {
-        EditorState::Description | EditorState::TestCases => &[
-            Constraint::Length(3), // language selector
-        ],
-        _ => &[
-            Constraint::Min(0),    // languages
-            Constraint::Length(3), // language selector
-        ],
-    };
+pub fn description(f: &mut Frame, rect: Rect, app: &mut App) {
+    let question = app.question.as_ref().unwrap();
 
-    let chunks = Layout::default()
+    let block = Block::bordered()
+        .title(format!(" {}. {} ", question.question_id, question.title))
+        .title_alignment(HorizontalAlignment::Center);
+
+    let md = utils::markdown_to_text(&question.content);
+    let paragraph = Paragraph::new(md)
+        .block(block)
+        .wrap(Wrap { trim: true })
+        .scroll((app.description_offset as u16, 0));
+
+    f.render_widget(paragraph, rect);
+}
+
+pub fn test_cases_languages_pane(f: &mut Frame, rect: Rect, app: &mut App) {
+    let main_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(constraints)
+        .constraints([Constraint::Length(3), Constraint::Min(0)])
         .split(rect);
 
-    if matches!(app.editor_state, EditorState::SelectingLanguage) {
-        render_language_grid(f, chunks[0], app);
-        render_selected_language(f, chunks[1], app);
-    } else {
-        render_selected_language(f, chunks[0], app);
+    let bar_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(0), Constraint::Length(21)])
+        .split(main_chunks[0]);
+
+    test_case_tabs(f, bar_chunks[0], app);
+    language_selector(f, bar_chunks[1], app);
+
+    match app.editor_state {
+        EditorState::SelectingLanguage => language_grid(f, main_chunks[1], app),
+        EditorState::TestCases => {
+            app.last_test_case_viewport_height = main_chunks[1].height;
+            test_case_fields(f, main_chunks[1], app);
+        }
+        EditorState::EditingTestCaseField => test_case_fields(f, main_chunks[1], app),
+        _ => {}
     }
 }
 
-fn render_language_grid(f: &mut Frame, rect: Rect, app: &mut App) {
+fn language_selector(f: &mut Frame, rect: Rect, app: &mut App) {
+    let color = if matches!(app.editor_state, EditorState::SelectingLanguage) {
+        Color::Rgb(255, 160, 80)
+    } else {
+        Color::DarkGray
+    };
+
+    let style = Style::new().fg(color).bold();
+    let block = Block::bordered()
+        .title(" SELECTED LANGUAGE ")
+        .border_style(style);
+
+    let inner = block.inner(rect);
+    f.render_widget(block, rect);
+
+    let text = match app.selected_language {
+        Some(ref lang) => format!(" {lang}").set_style(style),
+        None => " none".set_style(style),
+    };
+
+    f.render_widget(text, inner);
+}
+
+fn language_grid(f: &mut Frame, rect: Rect, app: &mut App) {
     let question = app.question.as_ref().unwrap();
 
     let languages: Vec<_> = question
@@ -80,82 +117,7 @@ fn render_language_grid(f: &mut Frame, rect: Rect, app: &mut App) {
     f.render_widget(table, rect);
 }
 
-fn render_selected_language(f: &mut Frame, rect: Rect, app: &mut App) {
-    let color = if matches!(app.editor_state, EditorState::SelectingLanguage) {
-        Color::Rgb(255, 160, 80)
-    } else {
-        Color::DarkGray
-    };
-
-    let block = Block::bordered()
-        .title(" SELECTED LANGUAGE ")
-        .border_style(Style::default().fg(color));
-
-    let inner = block.inner(rect);
-    f.render_widget(block, rect);
-
-    let text = match app.selected_language {
-        Some(ref lang) => format!(" {lang}").fg(color).bold(),
-        None => " none".fg(Color::DarkGray),
-    };
-
-    f.render_widget(text, inner);
-}
-
-pub fn description(f: &mut Frame, rect: Rect, app: &mut App) {
-    let question = app.question.as_ref().unwrap();
-    let language_selector_offset = if matches!(app.editor_state, EditorState::SelectingLanguage) {
-        (question.code_snippets.len() as f32 / 3.0).ceil() as u16
-    } else {
-        0
-    };
-
-    let block = Block::bordered()
-        .title(format!(" {}. {} ", question.question_id, question.title))
-        .title_alignment(HorizontalAlignment::Center);
-
-    let md = utils::markdown_to_text(&question.content);
-    let paragraph = Paragraph::new(md)
-        .block(block)
-        .wrap(Wrap { trim: true })
-        .scroll((app.description_offset as u16 + language_selector_offset, 0));
-
-    f.render_widget(paragraph, rect);
-}
-
-pub fn test_cases(frame: &mut Frame, area: Rect, app: &mut App) {
-    let Some(question) = &app.question else {
-        return;
-    };
-
-    let constraints: &[_] = match app.editor_state {
-        EditorState::Description | EditorState::SelectingLanguage => &[
-            Constraint::Length(3), // case selector
-        ],
-        _ => &[
-            Constraint::Length(3), // case selector
-            Constraint::Length(1), // padding
-            Constraint::Min(0),    // case parameters
-        ],
-    };
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(constraints)
-        .split(area);
-
-    render_tabs(frame, chunks[0], app);
-
-    if matches!(
-        app.editor_state,
-        EditorState::TestCases | EditorState::EditingTestCaseField
-    ) {
-        app.last_test_case_viewport_height = chunks[2].height;
-        render_test_case_fields(frame, chunks[2], app, question);
-    }
-}
-
-fn render_tabs(frame: &mut Frame, area: Rect, app: &App) {
+fn test_case_tabs(frame: &mut Frame, area: Rect, app: &App) {
     let selected_color = match app.editor_state {
         EditorState::Description | EditorState::SelectingLanguage => Color::DarkGray,
         _ => Color::Rgb(255, 160, 80),
@@ -197,7 +159,7 @@ fn render_tabs(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(outer_block, area);
 }
 
-fn render_test_case_fields(frame: &mut Frame, area: Rect, app: &App, question: &Question) {
+fn test_case_fields(frame: &mut Frame, area: Rect, app: &App) {
     if app.test_cases.is_empty() {
         utils::render_empty_background(frame, area, " NO TEST CASES DEFINED ");
         return;
@@ -210,6 +172,7 @@ fn render_test_case_fields(frame: &mut Frame, area: Rect, app: &App, question: &
     let inner_area = container_block.inner(area);
     frame.render_widget(container_block, area);
 
+    let question = app.question.as_ref().unwrap();
     let case = &app.test_cases[app.selected_test_case];
     let param_names = &question.meta_data.params;
 
@@ -323,6 +286,8 @@ pub fn editor_controls(frame: &mut Frame, rect: Rect, app: &mut App) {
             Span::styled("BACK  ", desc_style),
             Span::styled("jk ", keys_style),
             Span::styled("MOVE  ", desc_style),
+            Span::styled("t ", keys_style),
+            Span::styled("CASES  ", desc_style),
             Span::styled("enter ", keys_style),
             Span::styled("SELECT  ", desc_style),
         ]),
@@ -337,6 +302,10 @@ pub fn editor_controls(frame: &mut Frame, rect: Rect, app: &mut App) {
             Span::styled("TEST  ", desc_style),
             Span::styled("s ", keys_style),
             Span::styled("SUBMIT  ", desc_style),
+            Span::styled("t ", keys_style),
+            Span::styled("CASES  ", desc_style),
+            Span::styled("c ", keys_style),
+            Span::styled("LANGUAGE  ", desc_style),
         ]),
         EditorState::TestCases => Line::from(vec![
             Span::styled("esc ", keys_style),
@@ -347,6 +316,12 @@ pub fn editor_controls(frame: &mut Frame, rect: Rect, app: &mut App) {
             Span::styled("ADD  ", desc_style),
             Span::styled("d ", keys_style),
             Span::styled("DELETE  ", desc_style),
+            Span::styled("r ", keys_style),
+            Span::styled("TEST  ", desc_style),
+            Span::styled("s ", keys_style),
+            Span::styled("SUBMIT  ", desc_style),
+            Span::styled("c ", keys_style),
+            Span::styled("LANGUAGE  ", desc_style),
             Span::styled("enter ", keys_style),
             Span::styled("SELECT  ", desc_style),
         ]),
