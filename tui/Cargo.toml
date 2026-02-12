@@ -6,5 +6,6 @@ edition = "2024"
 [dependencies]
 api = { version = "0.1.0", path = "../api" }
 html2md = "0.2.15"
+libc = "0.2.181"
 ratatui = "0.30.0"
 tokio = { version = "1.49.0", features = ["full"] }

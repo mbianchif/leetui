@@ -44,13 +44,15 @@ async fn run_app(terminal: &mut DefaultTerminal) -> Result<(), Box<dyn Error>> {
             UpdateResult::Continue => {
                 terminal.draw(|f| app.render(f))?;
             }
-            UpdateResult::SkipRendering => {}
-            UpdateResult::Exit => break,
             UpdateResult::OpenEditor => {
                 ratatui::restore();
-                // open the editor.
+                app.open_editor()?;
                 *terminal = ratatui::init();
+                terminal.clear()?;
+                terminal.draw(|f| app.render(f))?;
             }
+            UpdateResult::SkipRendering => {}
+            UpdateResult::Exit => break,
         }
     }
 

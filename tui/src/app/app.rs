@@ -1,4 +1,10 @@
-use std::{collections::HashSet, env, fs, io, path::PathBuf};
+use std::{
+    collections::HashSet,
+    env, fs, io,
+    os::unix::process::{CommandExt, ExitStatusExt},
+    path::PathBuf,
+    process::{Child, Command, ExitStatus},
+};
 
 use api::{Language, MatchedUser, ProblemSummary, Question, UserStatus};
 use ratatui::{
@@ -103,6 +109,9 @@ pub struct App {
     pub selected_case_text: usize,
     pub test_cases_scroll_offset: usize,
     pub last_test_case_viewport_height: u16,
+
+    // editor
+    pub editor_subprocess: Option<Child>,
 }
 
 impl App {
@@ -140,6 +149,7 @@ impl App {
             test_cases_scroll_offset: 0,
             last_test_case_viewport_height: 0,
             language_selection_index: 0,
+            editor_subprocess: None,
         };
 
         app.send_request(ClientRequest::FetchUserStatus);
@@ -253,6 +263,8 @@ impl App {
     }
 
     pub fn update(&mut self, action: Action) -> UpdateResult {
+        self.error_message = None;
+
         match self.state {
             AppState::Home => self.update_home(action),
             AppState::Editor => self.update_editor(action),
@@ -342,7 +354,7 @@ impl App {
                 EditorState::SelectingLanguage => {
                     self.handle_editor_selecting_language_key(key_event)
                 }
-                EditorState::Description => self.handle_editor_description_key(key_event),
+                EditorState::Description => return self.handle_editor_description_key(key_event),
                 EditorState::TestCases => self.handle_editor_test_cases_key(key_event),
                 EditorState::EditingTestCaseField => {
                     self.handle_editor_editing_test_case_key(key_event)
@@ -489,10 +501,16 @@ impl App {
         }
     }
 
-    fn handle_editor_description_key(&mut self, key: KeyEvent) {
+    fn handle_editor_description_key(&mut self, key: KeyEvent) -> UpdateResult {
         match key.code {
             KeyCode::Esc => {
                 self.state = AppState::Home;
+
+                if let Some(mut child) = self.editor_subprocess.take() {
+                    if let Err(e) = child.kill() {
+                        self.error_message = Some(e.to_string());
+                    }
+                }
             }
             KeyCode::Char('j') => {
                 self.description_offset = self.description_offset.saturating_add(1);
@@ -506,12 +524,21 @@ impl App {
             KeyCode::Char('c') => {
                 self.editor_state = EditorState::SelectingLanguage;
             }
-            KeyCode::Char('e') => {} // open editor
+            KeyCode::Char('e') => {
+                if self.selected_language.is_some() {
+                    return UpdateResult::OpenEditor;
+                } else {
+                    self.error_message = Some("no language is selected".into());
+                }
+            }
             KeyCode::Char('s') => {} // submit code
             KeyCode::Char('r') => {} // run tests
             _ => {}
         }
+
+        UpdateResult::Continue
     }
+
     fn handle_editor_test_cases_key(&mut self, key: KeyEvent) {
         let Some(ref question) = self.question else {
             unreachable!()
@@ -680,6 +707,77 @@ impl App {
             .flatten()
             .map(|file| file.path())
             .collect();
+
+        Ok(())
+    }
+
+    pub fn open_editor(&mut self) -> io::Result<()> {
+        let child = match self.editor_subprocess.take() {
+            Some(child) => {
+                let pid = child.id() as i32;
+                unsafe { libc::kill(pid, libc::SIGCONT) };
+                child
+            }
+            None => {
+                let slug = &self.question.as_ref().unwrap().title_slug;
+
+                let leetui_dir = env::home_dir().unwrap_or_default().join(".leetui");
+                let dir_path = leetui_dir.join(slug);
+
+                fs::create_dir_all(&dir_path)?;
+                let lang = self.selected_language.as_ref().unwrap();
+                let file_name = format!("solution.{}", lang.ext());
+                let file_path = dir_path.join(&file_name);
+
+                if !file_path.exists() {
+                    let question = self.question.as_ref().unwrap();
+                    let code_snippet = question
+                        .code_snippets
+                        .iter()
+                        .find(|cs| cs.lang == *lang)
+                        .unwrap();
+
+                    let code = &code_snippet.code;
+                    fs::write(&file_path, &code)?;
+                }
+
+                let editor = env::var("EDITOR").map_err(|e| io::Error::other(e))?;
+                let mut cmd = Command::new(editor);
+                cmd.arg(file_path).current_dir(&leetui_dir);
+
+                unsafe {
+                    cmd.pre_exec(|| {
+                        let pid = libc::getpid();
+                        libc::setpgid(pid, pid);
+                        Ok(())
+                    });
+                }
+
+                cmd.spawn()?
+            }
+        };
+
+        let pid = child.id() as i32;
+        let mut status: i32 = 0;
+
+        unsafe {
+            libc::signal(libc::SIGTSTP, libc::SIG_IGN);
+            libc::signal(libc::SIGTTOU, libc::SIG_IGN);
+            libc::signal(libc::SIGTTIN, libc::SIG_IGN);
+
+            libc::tcsetpgrp(libc::STDIN_FILENO, pid);
+            libc::waitpid(pid, &mut status, libc::WUNTRACED);
+            libc::tcsetpgrp(libc::STDIN_FILENO, libc::getpgrp());
+
+            libc::signal(libc::SIGTSTP, libc::SIG_DFL);
+            libc::signal(libc::SIGTTOU, libc::SIG_DFL);
+            libc::signal(libc::SIGTTIN, libc::SIG_DFL);
+        }
+
+        let exit_status = ExitStatus::from_raw(status);
+        if exit_status.stopped_signal().is_some() {
+            self.editor_subprocess = Some(child);
+        }
 
         Ok(())
     }
